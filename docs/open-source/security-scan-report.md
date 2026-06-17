@@ -1,13 +1,13 @@
 # Open Source Security Scan Report
 
 - Current tree blockers: 0
-- Current tree review items: 0
+- Current tree review items: 1
 - Git history matches: 0
 - External tools: gitleaks: not installed; trufflehog: not installed
 
 ## Current Tree
 
-- PASS: no blocking secret or personal-data markers found in tracked current files.
+- REVIEW: docs/release/gatekeeper-check.md (Developer ID personal identity)
 
 ## Git History
 

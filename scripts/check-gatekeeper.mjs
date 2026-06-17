@@ -22,8 +22,11 @@ function run(command, args) {
   };
 }
 
-function publicPath(value) {
-  return value.split(root).join("<repo>/");
+function publicOutput(value) {
+  return value
+    .split(root).join("<repo>/")
+    .replace(/TeamIdentifier=[A-Z0-9]+/g, "TeamIdentifier=<redacted>")
+    .replace(/\([A-Z0-9]{10}\)/g, "(<team-id>)");
 }
 
 const codesignApp = run("/usr/bin/codesign", ["-dv", "--verbose=4", app]);
@@ -43,8 +46,8 @@ function section(title, result) {
 - Exit status: ${result.status}
 
 \`\`\`text
-${publicPath(result.command)}
-${publicPath(result.output)}
+${publicOutput(result.command)}
+${publicOutput(result.output)}
 \`\`\`
 `;
 }

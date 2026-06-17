@@ -1,6 +1,6 @@
 # LANPilot Audit
 
-LANPilot Audit -- Local-first LAN governance audit assistant for macOS. Open-source snapshot with notarized DMG distribution handled separately.
+LANPilot Audit -- Local-first LAN governance audit assistant for macOS. Developer ID signed and Apple notarized DMG available in Releases.
 
 [![Release](https://img.shields.io/github/v/release/cqforest123-wq/lanpilot-audit?include_prereleases)](https://github.com/cqforest123-wq/lanpilot-audit/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/cqforest123-wq/lanpilot-audit/ci.yml?branch=main&label=CI)](https://github.com/cqforest123-wq/lanpilot-audit/actions)
@@ -68,18 +68,18 @@ Small networks often expose SMB, remote admin, web panels, gateway services, and
 
 ## Download
 
-The public repository publishes source snapshots, starting with [LANPilot Audit v1.5.1 Open Source Snapshot](https://github.com/cqforest123-wq/lanpilot-audit/releases/tag/v1.5.1).
+Download the Developer ID signed and Apple notarized DMG from [LANPilot Audit v1.5.1](https://github.com/cqforest123-wq/lanpilot-audit/releases/tag/v1.5.1):
 
-Developer ID notarized DMG distribution is handled separately from this open-source snapshot repository so signing, notarization, and release operations stay isolated from public source history.
+- [LANPilot-Audit_1.5.1_aarch64.dmg](https://github.com/cqforest123-wq/lanpilot-audit/releases/download/v1.5.1/LANPilot-Audit_1.5.1_aarch64.dmg)
+- [SHA256SUMS.txt](https://github.com/cqforest123-wq/lanpilot-audit/releases/download/v1.5.1/SHA256SUMS.txt)
 
-When a notarized DMG is provided through the distribution channel, verify the SHA-256 checksum before opening it:
+Verify the SHA-256 checksum before opening the DMG:
 
 ```sh
-shasum -a 256 "LANPilot-Audit_1.5.0_aarch64.dmg"
-cat SHA256SUMS.txt
+shasum -a 256 -c SHA256SUMS.txt
 ```
 
-The signed release path supports Developer ID signing, Apple notarization, stapling, and Gatekeeper verification. Internal readiness builds may be marked pre-release when they are not intended for broad distribution.
+The v1.5.1 DMG is Developer ID signed, Apple notarized, stapled, and Gatekeeper accepted.
 
 ## Build From Source
 
