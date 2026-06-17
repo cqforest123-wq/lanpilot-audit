@@ -16,13 +16,11 @@ LANPilot Audit helps small teams understand LAN exposure without turning an audi
 
 ## Visual Preview
 
-Screenshots and demo assets are planned in [docs/assets](docs/assets/README.md). The README intentionally avoids broken image links until final public screenshots are captured.
+Screenshots use synthetic demo data from [docs/assets/demo-data](docs/assets/demo-data/public-demo-audit.json). They do not include production network information.
 
-| Preview slot | Planned asset |
-| --- | --- |
-| Authorization workflow | Main interface with explicit scope confirmation |
-| Localized report | Chinese report view with governance language |
-| Remediation workflow | Remediation Assistant and service exposure matrix |
+| Authorization workflow | Chinese report view | Remediation workflow |
+| --- | --- | --- |
+| ![Authorization workflow with synthetic demo data](docs/assets/screenshot-authorization.png) | ![Chinese report view with synthetic demo data](docs/assets/screenshot-report-zh.png) | ![Remediation workflow with synthetic demo data](docs/assets/screenshot-remediation.png) |
 
 ## Quick Start
 

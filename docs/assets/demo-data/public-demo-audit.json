@@ -1,0 +1,105 @@
+{
+  "project": {
+    "name": "LANPilot Demo Review",
+    "operator": "Demo Operator",
+    "workspace": "/Users/demo/lanpilot-demo",
+    "generatedAt": "2026-06-17T11:30:00+08:00",
+    "scope": "192.0.2.0/24 documentation network"
+  },
+  "summary": {
+    "high": 1,
+    "medium": 4,
+    "low": 6,
+    "assets": 4,
+    "reachable": 3,
+    "openServiceHosts": 3
+  },
+  "assets": [
+    {
+      "name": "Demo Gateway",
+      "ip": "192.0.2.1",
+      "mac": "redacted",
+      "role": "Gateway",
+      "services": "53, 80, 443",
+      "risk": "Medium"
+    },
+    {
+      "name": "Demo Workstation",
+      "ip": "192.0.2.24",
+      "mac": "redacted",
+      "role": "Client",
+      "services": "No open common services",
+      "risk": "Low"
+    },
+    {
+      "name": "Demo NAS",
+      "ip": "192.0.2.45",
+      "mac": "redacted",
+      "role": "Storage",
+      "services": "445",
+      "risk": "High"
+    },
+    {
+      "name": "Demo Printer",
+      "ip": "198.51.100.20",
+      "mac": "redacted",
+      "role": "Office device",
+      "services": "80, 9100",
+      "risk": "Medium"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "High",
+      "asset": "Demo NAS",
+      "ip": "192.0.2.45",
+      "issue": "File sharing service is reachable from client segment",
+      "owner": "IT Owner",
+      "due": "0-7 days"
+    },
+    {
+      "severity": "Medium",
+      "asset": "Demo Gateway",
+      "ip": "192.0.2.1",
+      "issue": "Gateway web administration interface is visible",
+      "owner": "Network Owner",
+      "due": "8-30 days"
+    },
+    {
+      "severity": "Medium",
+      "asset": "Demo Printer",
+      "ip": "198.51.100.20",
+      "issue": "Printer web panel is visible to the sample client",
+      "owner": "Facilities Owner",
+      "due": "8-30 days"
+    }
+  ],
+  "remediation": [
+    {
+      "ticket": "LPA-DEMO-001",
+      "title": "Restrict Demo NAS file sharing exposure",
+      "owner": "IT Owner",
+      "target": "0-7 days",
+      "retest": "Run authorized low-intensity service exposure check from the sample client."
+    },
+    {
+      "ticket": "LPA-DEMO-002",
+      "title": "Move gateway administration to a management-only path",
+      "owner": "Network Owner",
+      "target": "8-30 days",
+      "retest": "Confirm web administration is not visible from the sample client segment."
+    },
+    {
+      "ticket": "LPA-DEMO-003",
+      "title": "Review printer web panel visibility",
+      "owner": "Facilities Owner",
+      "target": "8-30 days",
+      "retest": "Confirm only approved administration hosts can reach the printer panel."
+    }
+  ],
+  "rawEvidence": [
+    "Demo fixture only. No production network data is included.",
+    "Reserved documentation addresses are used for every asset.",
+    "MAC addresses, local usernames, and device identifiers are intentionally redacted."
+  ]
+}

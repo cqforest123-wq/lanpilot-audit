@@ -1,12 +1,16 @@
 # Screenshot And Demo Plan
 
-No production or customer screenshots are committed yet. Use this checklist to capture public-safe assets from synthetic fixtures or a controlled lab.
+The committed screenshots are generated from synthetic public demo data in [demo-data/public-demo-audit.json](demo-data/public-demo-audit.json). They use documentation-reserved addresses, redacted MAC values, demo device names, and the sample path `/Users/demo/lanpilot-demo`.
+
+Do not commit screenshots from real customer, family, office, or production networks. Do not commit images that reveal real IP addresses, MAC addresses, gateways, device names, usernames, local paths, Wi-Fi names, hostnames, or raw network evidence.
 
 ## High Priority
 
-1. Main interface / authorization workflow.
-2. Chinese report page.
-3. Remediation Assistant / service exposure matrix.
+These README preview screenshots are committed:
+
+1. `screenshot-authorization.png` - authorization workflow and safety boundary.
+2. `screenshot-report-zh.png` - Chinese report page with demo risk register and Raw Evidence entry.
+3. `screenshot-remediation.png` - remediation tickets and service exposure matrix.
 
 ## Additional Assets
 
@@ -17,14 +21,18 @@ No production or customer screenshots are committed yet. Use this checklist to c
 5. Settings / language.
 6. Short GIF showing authorized workflow progress.
 
-## Planned File Names
+## Regenerate Screenshots
 
-- `screenshot-dashboard.png`
-- `screenshot-authorization.png`
-- `screenshot-report-zh-cn.png`
-- `screenshot-remediation-matrix.png`
-- `demo.gif`
+```sh
+npm install
+npm run docs:screenshots
+npm run public:check
+```
 
-Do not commit screenshots from real customer, family, or production networks. Use synthetic fixtures or a controlled lab.
+The generator writes temporary HTML outside the repository and updates only:
 
-Before adding an image reference to the README, commit the image file first and verify the link with `npm run public:check`.
+- `docs/assets/screenshot-authorization.png`
+- `docs/assets/screenshot-report-zh.png`
+- `docs/assets/screenshot-remediation.png`
+
+Before adding or replacing a README image reference, commit the image file first and verify the link with `npm run public:check`.
