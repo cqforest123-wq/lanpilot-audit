@@ -1,9 +1,9 @@
 # LANPilot Audit
 
-LANPilot Audit -- Local-first LAN governance audit assistant for macOS.
+LANPilot Audit -- Local-first LAN governance audit assistant for macOS. Open-source snapshot with notarized DMG distribution handled separately.
 
-[![Release](https://img.shields.io/github/v/release/cqforest123-wq/lanpilot-audit-app?include_prereleases)](https://github.com/cqforest123-wq/lanpilot-audit-app/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/cqforest123-wq/lanpilot-audit-app/ci.yml?branch=main&label=CI)](https://github.com/cqforest123-wq/lanpilot-audit-app/actions)
+[![Release](https://img.shields.io/github/v/release/cqforest123-wq/lanpilot-audit?include_prereleases)](https://github.com/cqforest123-wq/lanpilot-audit/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/cqforest123-wq/lanpilot-audit/ci.yml?branch=main&label=CI)](https://github.com/cqforest123-wq/lanpilot-audit/actions)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-lightgrey)
 ![Tauri](https://img.shields.io/badge/Tauri-2.x-24c8db)
@@ -14,11 +14,44 @@ LANPilot Audit -- Local-first LAN governance audit assistant for macOS.
 
 LANPilot Audit helps small teams understand LAN exposure without turning an audit tool into an offensive scanner. It runs a fixed, authorized, low-intensity local workflow and turns observations into assets, risk registers, remediation plans, evidence, and retest records.
 
+## Visual Preview
+
 Screenshots and demo assets are planned in [docs/assets](docs/assets/README.md). The README intentionally avoids broken image links until final public screenshots are captured.
+
+| Preview slot | Planned asset |
+| --- | --- |
+| Authorization workflow | Main interface with explicit scope confirmation |
+| Localized report | Chinese report view with governance language |
+| Remediation workflow | Remediation Assistant and service exposure matrix |
+
+## Quick Start
+
+```sh
+git clone https://github.com/cqforest123-wq/lanpilot-audit.git
+cd lanpilot-audit
+npm install
+npm run check
+npm run tauri -- dev
+```
+
+You can also use `npm run app:dev` for the local Tauri development run.
 
 ## Why
 
 Small networks often expose SMB, remote admin, web panels, gateway services, and client-to-client access without a clear owner or remediation path. LANPilot turns low-intensity observations into risk registers, remediation plans, and retest workflows that are useful for small-business governance.
+
+## Safety Boundary
+
+**LANPilot Audit is for networks you own or are explicitly authorized to assess.**
+
+- No exploit modules.
+- No credential testing.
+- No brute force.
+- No default-password testing.
+- No unauthorized login.
+- No configuration changes.
+- No lateral movement.
+- No cloud upload of audit evidence.
 
 ## Features
 
@@ -35,31 +68,20 @@ Small networks often expose SMB, remote admin, web panels, gateway services, and
 - Export ZIP, HTML, Markdown, CSV, and JSON outputs.
 - Developer ID signed and Apple notarized DMG release path.
 
-## Safety Boundary
-
-LANPilot Audit is for networks you own or are explicitly authorized to assess.
-
-- No exploit modules.
-- No credential testing.
-- No brute force.
-- No default-password testing.
-- No unauthorized login.
-- No configuration changes.
-- No lateral movement.
-- No cloud upload of audit evidence.
-
 ## Download
 
-Download the latest release from [GitHub Releases](https://github.com/cqforest123-wq/lanpilot-audit-app/releases/latest).
+The public repository publishes source snapshots, starting with [LANPilot Audit v1.5.1 Open Source Snapshot](https://github.com/cqforest123-wq/lanpilot-audit/releases/tag/v1.5.1).
 
-Verify the SHA-256 checksum before opening the DMG:
+Developer ID notarized DMG distribution is handled separately from this open-source snapshot repository so signing, notarization, and release operations stay isolated from public source history.
+
+When a notarized DMG is provided through the distribution channel, verify the SHA-256 checksum before opening it:
 
 ```sh
 shasum -a 256 "LANPilot-Audit_1.5.0_aarch64.dmg"
 cat SHA256SUMS.txt
 ```
 
-The public release path supports Developer ID signing, Apple notarization, stapling, and Gatekeeper verification. Internal readiness builds may be marked pre-release when they are not intended for broad distribution.
+The signed release path supports Developer ID signing, Apple notarization, stapling, and Gatekeeper verification. Internal readiness builds may be marked pre-release when they are not intended for broad distribution.
 
 ## Build From Source
 
@@ -101,4 +123,4 @@ Safe contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md), 
 
 Contributions that add offensive modules, credential testing, arbitrary shell command execution, unauthorized login, or automatic configuration changes are out of scope.
 
-If LANPilot Audit helps your team or your lab, please consider starring the project.
+If LANPilot Audit helps your network governance workflow, please consider starring the project.
