@@ -1,0 +1,33 @@
+name: Localization
+description: Report or improve translation coverage.
+title: "[Localization]: "
+labels: ["localization"]
+body:
+  - type: dropdown
+    id: locale
+    attributes:
+      label: Locale
+      options:
+        - en
+        - zh-CN
+        - zh-TW
+        - ja
+        - ko
+        - de
+        - fr
+        - es
+        - pt-BR
+        - it
+        - nl
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: Translation issue
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested wording

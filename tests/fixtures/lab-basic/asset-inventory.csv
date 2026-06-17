@@ -1,0 +1,2 @@
+asset_id,ip_address,mac_address,hostname,category,reachability,observed_services,evidence_source
+asset-1,192.0.2.10,redacted,printer.local,printer,reachable,443,ARP

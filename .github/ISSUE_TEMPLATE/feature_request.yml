@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest an authorized-governance feature.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What governance workflow would this improve?
+    validations:
+      required: true
+  - type: dropdown
+    id: governance
+    attributes:
+      label: Is this authorized-governance only?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Safety boundary
+      options:
+        - label: This does not require service login.
+          required: true
+        - label: This does not require credential testing.
+          required: true
+        - label: This does not require exploit code.
+          required: true
+        - label: This does not require configuration changes.
+          required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Data privacy impact
+      description: What data is observed, stored, exported, or localized?
+    validations:
+      required: true
+  - type: textarea
+    id: i18n
+    attributes:
+      label: i18n impact
+      description: What visible copy or report localization changes are needed?
+    validations:
+      required: true

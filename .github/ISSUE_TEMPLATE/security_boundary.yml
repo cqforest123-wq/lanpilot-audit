@@ -1,0 +1,28 @@
+name: Security boundary concern
+description: Report a possible safety-boundary regression.
+title: "[Boundary]: "
+labels: ["security-boundary"]
+body:
+  - type: textarea
+    id: concern
+    attributes:
+      label: Concern
+      description: Describe the workflow, command, or report behavior that appears unsafe.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Boundary category
+      options:
+        - label: Arbitrary command input
+        - label: Credential testing
+        - label: Unauthorized login
+        - label: Configuration change
+        - label: Lateral movement
+        - label: Cloud upload or export leak
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Redact private network details before posting.

@@ -1,0 +1,21 @@
+import type { Messages } from "../types";
+export const en: Messages = {
+  appName: "LANPilot Audit", navRun: "Run Audit", navReport: "Report", navExport: "Export", navSettings: "Settings",
+  landingEyebrow: "Authorized network governance audit", landingTitle: "One authorized workflow. Evidence, findings, report, and export.",
+  landingDescription: "LANPilot runs thirteen approved local checks in a fixed sequence and stops immediately on failure.",
+  startAudit: "Start Authorized Audit", latestReport: "View Latest Report", authorization: "Authorization",
+  authorizationDescription: "Document the authorized project and confirm every safety boundary.", projectName: "Project name",
+  site: "Site / organization", notes: "Notes", confirmAuthorization: "Confirm Authorization", cancel: "Cancel",
+  engineSetup: "Engine Setup", installEngine: "Install Bundled Engine", updateEngine: "Update Bundled Engine",
+  continueInterface: "Continue to Interface", interface: "Interface", continueRun: "Continue to Run",
+  runAudit: "Run Audit", runFullAudit: "Run Full Audit", stopOnFailure: "Stop on Failure", viewReport: "View Report",
+  report: "Report", export: "Export", exportZip: "Export ZIP", openExportFolder: "Open Export Folder",
+  settings: "Settings & About", language: "Language", unknown: "Unknown", missingFiles: "Missing report files",
+  limitedMode: "Limited mode", nmapUnavailable: "nmap is unavailable. Dependent checks will be skipped.",
+  safetyBoundary: "Safety boundary", privacy: "Local-first, no cloud upload",
+  pointInTime: "Findings are point-in-time observations based on current ARP cache, ICMP reachability, and low-intensity common service checks.",
+  high: "High", medium: "Medium", low: "Low", reachableClients: "Reachable clients", unreachableClients: "Unreachable clients",
+  openServiceHosts: "Open service hosts", gatewayPosture: "Gateway posture", riskRegister: "Risk Register",
+  remediationRoadmap: "Remediation Roadmap", executiveSummary: "Executive Summary", technicalReport: "Technical Report",
+  pending: "pending", running: "running", success: "success", failed: "failed", skipped: "skipped",
+};

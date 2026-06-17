@@ -1,0 +1,2 @@
+asset,port,subject,issuer,not_before,not_after,observation
+192.0.2.10,443,CN=example,CN=Example CA,2026-01-01,2027-01-01,observed

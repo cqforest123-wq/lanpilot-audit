@@ -1,0 +1,2 @@
+service_type,instance,domain,observation
+_http._tcp,Printer,local,observed

@@ -1,0 +1,21 @@
+import type { Locale, Messages } from "./types";
+
+const en: Messages = {
+  "remediation.title":"Remediation Assistant","remediation.description":"Create local, structured guidance and track authorized manual remediation.",
+  "remediation.safety":"LANPilot does not execute fixes, log in to services, or change configurations.",
+  "remediation.generate":"Generate Remediation Pack","remediation.export":"Export Remediation Pack","remediation.retest":"Enter Authorized Retest",
+  "remediation.saved":"Remediation pack saved locally.","remediation.noPack":"Generate a pack from the latest structured findings.",
+  "remediation.manualSteps":"Manual steps","remediation.validationSteps":"Validation steps","remediation.rollback":"Rollback considerations",
+  "remediation.status.open":"Open","remediation.status.assigned":"Assigned","remediation.status.in_progress":"In progress",
+  "remediation.status.remediated":"Remediated","remediation.status.accepted_risk":"Accepted risk",
+  "remediation.status.retest_required":"Retest required","remediation.status.verified":"Verified",
+};
+const overlays: Partial<Record<Locale, Messages>> = {
+  "zh-CN":{"remediation.title":"整改助手","remediation.description":"生成本地结构化整改指引，并跟踪经授权的人工整改。","remediation.safety":"LANPilot 不执行修复、不登录服务，也不修改配置。","remediation.generate":"生成整改包","remediation.export":"导出整改包","remediation.retest":"进入授权复测","remediation.saved":"整改包已保存到本地。","remediation.noPack":"请根据最近一次结构化发现生成整改包。","remediation.manualSteps":"人工整改步骤","remediation.validationSteps":"验证步骤","remediation.rollback":"回退注意事项","remediation.status.open":"待处理","remediation.status.assigned":"已分派","remediation.status.in_progress":"处理中","remediation.status.remediated":"已整改","remediation.status.accepted_risk":"已接受风险","remediation.status.retest_required":"需要复测","remediation.status.verified":"已验证"},
+  "zh-TW":{"remediation.title":"修正助手","remediation.description":"產生本機結構化修正指引，並追蹤經授權的人工修正。","remediation.safety":"LANPilot 不執行修復、不登入服務，也不修改設定。","remediation.generate":"產生修正包","remediation.export":"匯出修正包","remediation.retest":"進入授權複測","remediation.saved":"修正包已儲存於本機。","remediation.noPack":"請依最近一次結構化發現產生修正包。","remediation.manualSteps":"人工修正步驟","remediation.validationSteps":"驗證步驟","remediation.rollback":"回復注意事項","remediation.status.open":"待處理","remediation.status.assigned":"已分派","remediation.status.in_progress":"處理中","remediation.status.remediated":"已修正","remediation.status.accepted_risk":"已接受風險","remediation.status.retest_required":"需要複測","remediation.status.verified":"已驗證"},
+  ja:{"remediation.title":"是正アシスタント","remediation.description":"ローカルの構造化ガイダンスを作成し、承認済みの手動是正を追跡します。","remediation.safety":"LANPilot は修正の実行、サービスへのログイン、設定変更を行いません。","remediation.generate":"是正パックを生成","remediation.export":"是正パックをエクスポート","remediation.retest":"承認済み再テストへ","remediation.saved":"是正パックをローカルに保存しました。","remediation.noPack":"最新の構造化された所見から是正パックを生成してください。","remediation.manualSteps":"手動手順","remediation.validationSteps":"検証手順","remediation.rollback":"ロールバック上の注意","remediation.status.open":"未対応","remediation.status.assigned":"割当済み","remediation.status.in_progress":"対応中","remediation.status.remediated":"是正済み","remediation.status.accepted_risk":"リスク受容","remediation.status.retest_required":"再テスト必要","remediation.status.verified":"検証済み"},
+  ko:{"remediation.title":"개선 도우미","remediation.description":"로컬 구조화 지침을 만들고 승인된 수동 개선을 추적합니다.","remediation.safety":"LANPilot은 수정 실행, 서비스 로그인 또는 구성 변경을 수행하지 않습니다.","remediation.generate":"개선 팩 생성","remediation.export":"개선 팩 내보내기","remediation.retest":"승인된 재검사로 이동","remediation.saved":"개선 팩을 로컬에 저장했습니다.","remediation.noPack":"최신 구조화 발견 사항에서 개선 팩을 생성하세요.","remediation.manualSteps":"수동 단계","remediation.validationSteps":"검증 단계","remediation.rollback":"롤백 고려 사항","remediation.status.open":"미처리","remediation.status.assigned":"할당됨","remediation.status.in_progress":"진행 중","remediation.status.remediated":"개선 완료","remediation.status.accepted_risk":"위험 수용","remediation.status.retest_required":"재검사 필요","remediation.status.verified":"검증됨"},
+};
+export const remediationMessages = Object.fromEntries(
+  (["en","zh-CN","zh-TW","ja","ko","de","fr","es","pt-BR","it","nl"] as Locale[]).map((locale) => [locale, {...en, ...(overlays[locale] ?? {})}]),
+) as Record<Locale, Messages>;

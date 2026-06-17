@@ -1,0 +1,26 @@
+# Release Checklist
+
+- [ ] Sync the approved CLI engine with `npm run engine:sync`
+- [ ] Verify bundled engine integrity and source parity with `npm run engine:sync:check`
+- [ ] `npm run check`
+- [ ] Confirm GitHub Actions pass in both the engine and app repositories
+- [ ] `npm run app:dev`, confirm startup, then stop
+- [ ] Verify language switching and fallback
+- [ ] Verify authorization cannot be bypassed
+- [ ] Verify Engine Setup install/update and limited mode
+- [ ] Verify a modified or unlisted engine file blocks installation/execution
+- [ ] Verify fixed thirteen-step order and stop on failure
+- [ ] Verify missing report files remain readable as Unknown
+- [ ] Verify ZIP export skips symbolic links
+- [ ] `npm run release:local`
+- [ ] `npm run release:artifacts:verify`
+- [ ] `npm run release:smoke`
+- [ ] `npm run release:prepare`, then verify `release-assets/SHA256SUMS.txt`
+- [ ] Verify DMG and `checksums/SHA256SUMS.txt`
+- [ ] `npm run release:website`
+- [ ] Verify website download, privacy, notes, and checksum
+- [ ] `npm run release:verify`
+- [ ] `npm run gatekeeper:check`
+- [ ] Check signing/notarization credentials before public distribution
+- [ ] Run `Public Notarized Release` and verify the prerelease is promoted
+- [ ] Confirm no audit data upload capability exists

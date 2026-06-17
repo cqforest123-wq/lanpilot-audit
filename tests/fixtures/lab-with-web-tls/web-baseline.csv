@@ -1,0 +1,2 @@
+asset,port,scheme,status,server,content_type,observation
+192.0.2.10,443,https,200,example,text/html,observed

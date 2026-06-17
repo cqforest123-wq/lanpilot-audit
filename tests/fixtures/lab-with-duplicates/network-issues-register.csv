@@ -1,0 +1,3 @@
+severity,asset,category,finding,recommended_action,status
+Medium,192.0.2.10,Web exposure,Web service 443 is reachable,Confirm business purpose,Open
+Medium,192.0.2.10,Web exposure,Web service 443 is reachable,Confirm business purpose,Open
