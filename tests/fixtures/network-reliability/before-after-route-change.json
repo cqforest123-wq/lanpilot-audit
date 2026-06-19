@@ -1,0 +1,69 @@
+{
+  "previous": {
+    "profile": "Home LAN",
+    "physicalLan": {
+      "activeInterface": "en5",
+      "interfaceKind": "wired",
+      "ipv4": "192.0.2.24",
+      "dhcpOk": true,
+      "gatewayIp": "192.0.2.1",
+      "gatewayPingLossPct": 0,
+      "gatewayPingAvgMs": 2,
+      "gatewayDnsMs": 12
+    },
+    "localControlPlane": {
+      "systemDnsServers": ["192.0.2.1"],
+      "scopedResolvers": [],
+      "resolverSummary": "Gateway DNS",
+      "listeningServices": []
+    },
+    "overlay": {
+      "defaultRouteInterface": "en5",
+      "utunInterfaces": [],
+      "tailscaleRunning": false,
+      "stashDetected": false,
+      "dnsViaOverlay": false
+    },
+    "external": {
+      "publicIp": "203.0.113.24",
+      "targets": [
+        { "group": "apple", "url": "https://www.apple.com", "totalMs": 700, "status": 200, "failed": false }
+      ]
+    }
+  },
+  "current": {
+    "profile": "VPN / Proxy Active",
+    "physicalLan": {
+      "activeInterface": "en5",
+      "interfaceKind": "wired",
+      "ipv4": "192.0.2.24",
+      "dhcpOk": true,
+      "gatewayIp": "192.0.2.1",
+      "gatewayPingLossPct": 0,
+      "gatewayPingAvgMs": 3,
+      "gatewayDnsMs": 18
+    },
+    "localControlPlane": {
+      "systemDnsServers": ["198.18.0.1"],
+      "scopedResolvers": ["utun4"],
+      "resolverSummary": "Proxy overlay DNS",
+      "listeningServices": [
+        { "name": "Stash HTTP proxy", "bindAddress": "127.0.0.1", "port": 7890, "process": "Stash" }
+      ]
+    },
+    "overlay": {
+      "defaultRouteInterface": "utun4",
+      "utunInterfaces": ["utun4"],
+      "stashDetected": true,
+      "stashTunDetected": true,
+      "tailscaleRunning": false,
+      "dnsViaOverlay": true
+    },
+    "external": {
+      "publicIp": "203.0.113.88",
+      "targets": [
+        { "group": "apple", "url": "https://www.apple.com", "totalMs": 1300, "status": 200, "failed": false }
+      ]
+    }
+  }
+}

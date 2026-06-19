@@ -5,10 +5,11 @@ import { supportedLocales, useI18n } from "./i18n";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
+import type { NetworkReliabilityDiagnosis, NetworkReliabilityEvidence, ReliabilityStatus } from "./network-reliability";
 import packageJson from "../package.json";
 import "./App.css";
 
-type Page = "landing" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
+type Page = "landing" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "networkReliability" | "report" | "compare" | "remediation" | "export" | "settings";
 type StepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 type AuditStepId =
   | "init_lab"
@@ -115,6 +116,14 @@ interface ExportResult {
   zipPath: string;
 }
 
+interface NetworkReliabilityRun {
+  summary: NetworkReliabilityDiagnosis;
+  evidence: NetworkReliabilityEvidence;
+  reportMarkdown: string;
+  supportBundlePath: string;
+  outputDirectory: string;
+}
+
 interface AuditStep {
   id: AuditStepId;
   labelKey: string;
@@ -181,6 +190,7 @@ function App() {
           <button type="button" disabled={auditRunning} onClick={startAuthorization}>{t("navRun")}</button>
           <button type="button" disabled={auditRunning} onClick={() => navigate("assets")}>{t("navAssets")}</button>
           <button type="button" disabled={auditRunning} onClick={() => navigate("exposure")}>{t("navExposure")}</button>
+          <button type="button" disabled={auditRunning} onClick={() => navigate("networkReliability")}>{t("navNetworkReliability")}</button>
           <button type="button" disabled={auditRunning} onClick={() => navigate("report")}>{t("navReport")}</button>
           <button type="button" disabled={auditRunning} onClick={() => navigate("compare")}>{t("navCompare")}</button>
           <button type="button" disabled={auditRunning} onClick={() => navigate("remediation")}>{t("navRemediation")}</button>
@@ -223,6 +233,7 @@ function App() {
         {page === "report" && <ReportPage initialReport={latestReport} />}
         {page === "assets" && <GovernanceDataPage titleKey="toolbox.assets" descriptionKey="toolbox.assetsDescription" fields={["assetInventorySummary", "assetInventory", "localNetworkConfig"]} />}
         {page === "exposure" && <GovernanceDataPage titleKey="toolbox.exposure" descriptionKey="toolbox.exposureDescription" fields={["serviceExposureSummary", "serviceExposureMatrix", "mdnsServices", "webBaseline", "tlsCertificates"]} />}
+        {page === "networkReliability" && <NetworkReliabilityPage onRunningChange={setAuditRunning} />}
         {page === "compare" && <GovernanceDataPage titleKey="toolbox.compare" descriptionKey="toolbox.compareDescription" fields={["snapshotDiff", "governanceSummary"]} />}
         {page === "remediation" && <RemediationPage onRetest={startAuthorization} />}
         {page === "export" && <ExportPage />}
@@ -694,6 +705,182 @@ function RemediationPage({ onRetest }: { onRetest: () => void }) {
     {!pack && !error && <p className="message">{t("remediation.noPack")}</p>}
     {message && <p className="message success-message">{message}</p>}{error && <RawDetail detail={error} />}
   </section>;
+}
+
+function NetworkReliabilityPage({ onRunningChange }: { onRunningChange: (running: boolean) => void }) {
+  const { t } = useI18n();
+  const [projectName, setProjectName] = useState("");
+  const [checks, setChecks] = useState([false, false, false, false]);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<NetworkReliabilityRun | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const allChecked = checks.every(Boolean);
+  const canRun = allChecked && projectName.trim().length > 0 && !running;
+
+  const toggleCheck = (index: number, checked: boolean) => {
+    setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? checked : value));
+  };
+
+  const runCheck = async () => {
+    setRunning(true);
+    onRunningChange(true);
+    setError("");
+    setMessage("");
+    try {
+      await invoke("authorize_audit", { projectName: projectName.trim() });
+      const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check");
+      setResult(next);
+      setMessage(`${t("reliability.savedTo")}: ${next.outputDirectory}`);
+      setChecks([false, false, false, false]);
+    } catch (value) {
+      setError(errorMessage(value));
+    } finally {
+      setRunning(false);
+      onRunningChange(false);
+    }
+  };
+
+  const openArtifact = async (kind: string) => {
+    setError("");
+    setMessage("");
+    try {
+      await invoke("open_network_reliability_artifact", { kind });
+    } catch (value) {
+      setError(errorMessage(value));
+    }
+  };
+
+  return (
+    <section className="content-stack reliability-page">
+      <PageHeading eyebrow={t("reliability.eyebrow")} title={t("reliability.title")} description={t("reliability.description")} />
+      <p className="limitation">{t("pointInTime")}</p>
+      <div className="form-grid">
+        <label>{t("reliability.projectName")} <strong>*</strong><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
+      </div>
+      <div className="confirmation-list">
+        {[
+          t("reliability.confirmScope"),
+          t("reliability.confirmReadOnly"),
+          t("reliability.confirmNoChanges"),
+          t("reliability.confirmLocalFiles"),
+        ].map((label, index) => (
+          <label className="confirmation card compact" key={label}>
+            <input type="checkbox" checked={checks[index]} onChange={(event) => toggleCheck(index, event.target.checked)} />
+            <span><strong>{label}</strong></span>
+          </label>
+        ))}
+      </div>
+      <div className="actions">
+        <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : t("reliability.run")}</button>
+      </div>
+      {message && <p className="message success-message">{message}</p>}
+      {error && <RawDetail detail={error} />}
+      {!result && !error && <p className="message">{t("reliability.noResult")}</p>}
+      {result && <NetworkReliabilityResult result={result} onOpenArtifact={openArtifact} />}
+    </section>
+  );
+}
+
+function NetworkReliabilityResult({ result, onOpenArtifact }: { result: NetworkReliabilityRun; onOpenArtifact: (kind: string) => Promise<void> }) {
+  const { t } = useI18n();
+  const summary = result.summary;
+  const evidence = result.evidence;
+  const pathSegments = summary.currentPath.split(/\s+->\s+/).filter(Boolean);
+  const overlayComponents = [
+    evidence.overlay.stashDetected ? "Stash" : "",
+    evidence.overlay.tailscaleRunning ? "Tailscale" : "",
+    evidence.overlay.wireGuardDetected ? "WireGuard" : "",
+    evidence.overlay.openVpnDetected ? "OpenVPN" : "",
+    evidence.overlay.clashDetected ? "Clash" : "",
+    evidence.overlay.surgeDetected ? "Surge" : "",
+  ].filter(Boolean).join(", ") || t("status.unknown");
+
+  return (
+    <div className="content-stack">
+      <div className="summary-grid reliability-summary">
+        <ReliabilitySummaryCard label={t("reliability.overallStatus")} status={summary.overallStatus} />
+        <ReliabilitySummaryCard label={t("reliability.physicalLan")} status={summary.physicalLanStatus} />
+        <ReliabilitySummaryCard label={t("reliability.dns")} status={summary.dnsStatus} />
+        <ReliabilitySummaryCard label={t("reliability.externalInternet")} status={summary.externalPathStatus} />
+      </div>
+      <section className="card compact reliability-path">
+        <h2>{t("reliability.networkPathView")}</h2>
+        <div className="path-segments">
+          {pathSegments.map((segment, index) => (
+            <span className="path-segment" key={`${segment}-${index}`}>{segment}</span>
+          ))}
+        </div>
+      </section>
+      <div className="reliability-grid">
+        <section className="card compact">
+          <h2>{t("reliability.summary")}</h2>
+          <dl className="report-metadata single-column">
+            <div><dt>{t("reliability.profile")}</dt><dd>{evidence.profile || t("status.unknown")}</dd></div>
+            <div><dt>{t("reliability.faultPoint")}</dt><dd>{summary.faultPoint}</dd></div>
+            <div><dt>{t("reliability.impact")}</dt><dd>{summary.impact}</dd></div>
+            <div><dt>{t("reliability.currentPath")}</dt><dd>{summary.currentPath}</dd></div>
+          </dl>
+        </section>
+        <section className="card compact">
+          <h2>{t("reliability.evidencePanel")}</h2>
+          <dl className="report-metadata single-column">
+            <div><dt>{t("reliability.interface")}</dt><dd>{evidence.physicalLan.activeInterface}</dd></div>
+            <div><dt>{t("reliability.gateway")}</dt><dd>{evidence.physicalLan.gatewayIp ?? t("status.unknown")}</dd></div>
+            <div><dt>{t("reliability.gatewayLoss")}</dt><dd>{formatNullablePercent(evidence.physicalLan.gatewayPingLossPct, t("status.unknown"))}</dd></div>
+            <div><dt>{t("reliability.gatewayLatency")}</dt><dd>{formatNullableMs(evidence.physicalLan.gatewayPingAvgMs, t("status.unknown"))}</dd></div>
+            <div><dt>{t("reliability.systemDns")}</dt><dd>{evidence.localControlPlane.systemDnsServers.join(", ") || t("status.unknown")}</dd></div>
+            <div><dt>{t("reliability.defaultRoute")}</dt><dd>{evidence.overlay.defaultRouteInterface ?? t("status.unknown")}</dd></div>
+            <div><dt>{t("reliability.overlayComponents")}</dt><dd>{overlayComponents}</dd></div>
+          </dl>
+        </section>
+      </div>
+      <div className="reliability-grid">
+        <NetworkListCard title={t("reliability.keyEvidence")} items={summary.evidence} />
+        <NetworkListCard title={t("reliability.advicePanel")} items={summary.remediationAdvice} />
+      </div>
+      <div className="reliability-grid">
+        <NetworkListCard title={t("reliability.retest")} items={summary.retestPlan} ordered />
+        <NetworkListCard title={t("reliability.externalTargets")} items={evidence.external.targets.map((target) => `${target.url}: ${formatNullableMs(target.totalMs, t("status.unknown"))}`)} />
+      </div>
+      <section className="card compact export-card">
+        <div>
+          <h2>{t("reliability.supportBundle")}</h2>
+          <p className="path">{result.supportBundlePath}</p>
+        </div>
+        <div className="actions">
+          <button className="secondary" type="button" onClick={() => onOpenArtifact("report")}>{t("reliability.exportMarkdown")}</button>
+          <button className="secondary" type="button" onClick={() => onOpenArtifact("summary")}>{t("reliability.exportJson")}</button>
+          <button className="secondary" type="button" onClick={() => onOpenArtifact("bundle")}>{t("reliability.exportZip")}</button>
+          <button className="secondary" type="button" onClick={() => onOpenArtifact("folder")}>{t("reliability.openOutput")}</button>
+        </div>
+      </section>
+      <details className="card compact report-section">
+        <summary>{t("reliability.rawEvidence")}</summary>
+        <p className="muted">{t("reliability.rawEvidenceDescription")}</p>
+        <pre>{JSON.stringify({ summary: result.summary, evidence: result.evidence }, null, 2)}</pre>
+      </details>
+    </div>
+  );
+}
+
+function ReliabilitySummaryCard({ label, status }: { label: string; status: ReliabilityStatus }) {
+  const { t } = useI18n();
+  return <div className={`summary-card card reliability-status ${status}`}><span>{label}</span><strong>{t(`reliability.status.${status}`)}</strong></div>;
+}
+
+function NetworkListCard({ title, items, ordered = false }: { title: string; items: string[]; ordered?: boolean }) {
+  const { t } = useI18n();
+  const Tag = ordered ? "ol" : "ul";
+  return <section className="card compact reliability-list"><h2>{title}</h2>{items.length === 0 ? <p className="muted">{t("status.unknown")}</p> : <Tag>{items.map((item) => <li key={item}>{item}</li>)}</Tag>}</section>;
+}
+
+function formatNullableMs(value: number | null | undefined, unknown: string): string {
+  return typeof value === "number" ? `${value} ms` : unknown;
+}
+
+function formatNullablePercent(value: number | null | undefined, unknown: string): string {
+  return typeof value === "number" ? `${value}%` : unknown;
 }
 
 function ExportPage() {

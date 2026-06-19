@@ -1,0 +1,39 @@
+{
+  "profile": "Unknown",
+  "physicalLan": {
+    "activeInterface": "en0",
+    "interfaceKind": "wifi",
+    "ipv4": "169.254.10.20",
+    "subnetMask": "255.255.0.0",
+    "dhcpOk": false,
+    "dhcpServer": null,
+    "dhcpRouter": null,
+    "dhcpDns": [],
+    "gatewayIp": null,
+    "gatewayPingLossPct": null,
+    "gatewayPingAvgMs": null,
+    "gatewayDnsMs": null,
+    "selfAssignedAddress": true,
+    "multipleActiveInterfaces": false
+  },
+  "localControlPlane": {
+    "systemDnsServers": [],
+    "scopedResolvers": [],
+    "resolverSummary": "No usable DHCP resolver",
+    "listeningServices": []
+  },
+  "overlay": {
+    "defaultRouteInterface": null,
+    "utunInterfaces": [],
+    "stashDetected": false,
+    "tailscaleRunning": false,
+    "multipleOverlayComponents": false,
+    "dnsViaOverlay": false
+  },
+  "external": {
+    "targets": [
+      { "group": "apple", "url": "https://www.apple.com", "failed": true }
+    ]
+  },
+  "rawEvidenceRefs": ["network-environment-evidence.json"]
+}

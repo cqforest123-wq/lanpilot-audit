@@ -8,6 +8,8 @@ const criticalKeys = [
   "toolbox.assets", "toolbox.exposure", "step.localNetworkConfig", "step.mdnsObservation",
   "step.webTlsBaseline", "toolbox.compare", "toolbox.remediation", "report", "export", "settings.title",
   "remediation.title", "remediation.generate", "remediation.retest", "remediation.safety",
+  "navNetworkReliability", "reliability.title", "reliability.run", "reliability.currentPath",
+  "reliability.keyEvidence", "reliability.advice", "reliability.retest",
 ];
 
 describe("visible CJK localization", () => {

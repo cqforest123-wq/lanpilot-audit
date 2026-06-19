@@ -1,0 +1,40 @@
+{
+  "profile": "Home LAN",
+  "physicalLan": {
+    "activeInterface": "en5",
+    "interfaceKind": "wired",
+    "ipv4": "192.0.2.24",
+    "subnetMask": "255.255.255.0",
+    "dhcpOk": true,
+    "dhcpServer": "192.0.2.1",
+    "dhcpRouter": "192.0.2.1",
+    "dhcpDns": ["192.0.2.1"],
+    "gatewayIp": "192.0.2.1",
+    "gatewayPingLossPct": 8,
+    "gatewayPingAvgMs": 35,
+    "gatewayPingJitterMs": 20,
+    "gatewayDnsMs": 80,
+    "selfAssignedAddress": false,
+    "multipleActiveInterfaces": false
+  },
+  "localControlPlane": {
+    "systemDnsServers": ["192.0.2.1"],
+    "scopedResolvers": [],
+    "resolverSummary": "System resolver uses Demo Gateway DNS",
+    "listeningServices": []
+  },
+  "overlay": {
+    "defaultRouteInterface": "en5",
+    "utunInterfaces": [],
+    "stashDetected": false,
+    "tailscaleRunning": false,
+    "multipleOverlayComponents": false,
+    "dnsViaOverlay": false
+  },
+  "external": {
+    "targets": [
+      { "group": "apple", "url": "https://www.apple.com", "totalMs": 2500, "status": 200, "failed": false }
+    ]
+  },
+  "rawEvidenceRefs": ["network-environment-evidence.json"]
+}

@@ -1,0 +1,58 @@
+{
+  "profile": "Home LAN",
+  "generatedAt": "2026-06-19T10:00:00+08:00",
+  "physicalLan": {
+    "activeInterface": "en5",
+    "interfaceKind": "wired",
+    "ipv4": "192.0.2.24",
+    "ipv6": "2001:db8::24",
+    "subnetMask": "255.255.255.0",
+    "dhcpOk": true,
+    "dhcpServer": "192.0.2.1",
+    "dhcpRouter": "192.0.2.1",
+    "dhcpDns": ["192.0.2.1"],
+    "dhcpLeaseSeconds": 86400,
+    "gatewayIp": "192.0.2.1",
+    "gatewayPingLossPct": 0,
+    "gatewayPingAvgMs": 2,
+    "gatewayPingJitterMs": 1,
+    "gatewayDnsMs": 12,
+    "arpSummary": "Demo Gateway and Demo Printer observed",
+    "selfAssignedAddress": false,
+    "multipleActiveInterfaces": false
+  },
+  "localControlPlane": {
+    "systemDnsServers": ["192.0.2.1"],
+    "scopedResolvers": [],
+    "resolverSummary": "System resolver uses Demo Gateway DNS",
+    "mdnsSummary": "Demo services only",
+    "listeningServices": []
+  },
+  "overlay": {
+    "defaultRouteInterface": "en5",
+    "defaultRouteGateway": "192.0.2.1",
+    "utunInterfaces": [],
+    "hasProxyRange19818": false,
+    "hasTailscaleRange10064": false,
+    "hasTailscaleDns100100": false,
+    "hasTailscaleIpv6Dns": false,
+    "tailscaleRunning": false,
+    "tailscaleExitNode": false,
+    "tailscaleDnsEnabled": false,
+    "stashDetected": false,
+    "stashTunDetected": false,
+    "stashPorts": [],
+    "multipleOverlayComponents": false,
+    "dnsViaOverlay": false
+  },
+  "external": {
+    "publicIp": "203.0.113.24",
+    "publicIpOrg": "Demo ISP",
+    "publicIpLocation": "Demo City",
+    "targets": [
+      { "group": "apple", "url": "https://www.apple.com", "dnsMs": 20, "tcpConnectMs": 80, "tlsMs": 160, "ttfbMs": 300, "totalMs": 720, "status": 200, "remoteIp": "203.0.113.10", "failed": false },
+      { "group": "developer", "url": "https://github.com", "dnsMs": 22, "tcpConnectMs": 90, "tlsMs": 180, "ttfbMs": 420, "totalMs": 850, "status": 200, "remoteIp": "203.0.113.11", "failed": false }
+    ]
+  },
+  "rawEvidenceRefs": ["network-environment-evidence.json"]
+}
