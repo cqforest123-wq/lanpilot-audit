@@ -1,6 +1,6 @@
 # Remediation Assistant
 
-LANPilot Audit v1.5.0 turns structured findings into a local remediation pack. It helps an authorized administrator assign ownership, document manual decisions, plan validation, and enter the existing authorized retest workflow.
+LANPilot Audit turns structured findings into a local remediation pack. It helps an authorized administrator assign ownership, document manual decisions, plan validation, and enter the existing authorized retest workflow.
 
 The assistant does not apply changes, log in to services, accept arbitrary commands, or bypass the audit authorization flow. Recommendations are guidance for qualified administrators to evaluate and carry out manually under their own change-control process.
 

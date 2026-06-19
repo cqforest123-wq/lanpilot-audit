@@ -13,9 +13,9 @@ The app has no arbitrary command input. It performs no credential testing,
 unauthorized login, configuration changes, or lateral movement. Evidence stays
 on the Mac unless the user explicitly creates a local ZIP export.
 
-Version 1.5.0 adds the Remediation Assistant's structured local guidance,
-tracking, fixed-file export, and authorized retest entry point while preserving
-the existing read-only governance and authorization boundaries.
+The current release includes the Remediation Assistant and Network Reliability
+workflow while preserving the existing read-only governance and authorization
+boundaries.
 
 The current direct-distribution build depends on separately installed `nmap`.
 See `sandbox-risk-notes.md` for the App Sandbox implications.

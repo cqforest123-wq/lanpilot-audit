@@ -68,10 +68,10 @@ Small networks often expose SMB, remote admin, web panels, gateway services, and
 
 ## Download
 
-Download the Developer ID signed and Apple notarized DMG from [LANPilot Audit v1.5.1](https://github.com/cqforest123-wq/lanpilot-audit/releases/tag/v1.5.1):
+Download the Developer ID signed and Apple notarized DMG from [LANPilot Audit v1.6.0](https://github.com/cqforest123-wq/lanpilot-audit/releases/tag/v1.6.0):
 
-- [LANPilot-Audit_1.5.1_aarch64.dmg](https://github.com/cqforest123-wq/lanpilot-audit/releases/download/v1.5.1/LANPilot-Audit_1.5.1_aarch64.dmg)
-- [SHA256SUMS.txt](https://github.com/cqforest123-wq/lanpilot-audit/releases/download/v1.5.1/SHA256SUMS.txt)
+- [LANPilot-Audit_1.6.0_aarch64.dmg](https://github.com/cqforest123-wq/lanpilot-audit/releases/download/v1.6.0/LANPilot-Audit_1.6.0_aarch64.dmg)
+- [SHA256SUMS.txt](https://github.com/cqforest123-wq/lanpilot-audit/releases/download/v1.6.0/SHA256SUMS.txt)
 
 Verify the SHA-256 checksum before opening the DMG:
 
@@ -79,7 +79,7 @@ Verify the SHA-256 checksum before opening the DMG:
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
-The v1.5.1 DMG is Developer ID signed, Apple notarized, stapled, and Gatekeeper accepted.
+The v1.6.0 DMG is Developer ID signed, Apple notarized, stapled, and Gatekeeper accepted.
 
 ## Build From Source
 

@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 const dmgName = `LANPilot Audit_${version}_aarch64.dmg`;
+const portableDmgName = `LANPilot-Audit_${version}_aarch64.dmg`;
 const sourceDmg = join(root, "src-tauri", "target", "release", "bundle", "dmg", dmgName);
 const website = join(root, "release", "website");
 const downloads = join(website, "downloads");
-const outputDmg = join(downloads, dmgName);
+const outputDmg = join(downloads, portableDmgName);
 const checksum = createHash("sha256").update(readFileSync(sourceDmg)).digest("hex");
 
 const style = `<style>
@@ -24,12 +25,12 @@ const page = (title, content) => `<!doctype html><html lang="en"><meta charset="
 rmSync(website, { recursive: true, force: true });
 mkdirSync(downloads, { recursive: true });
 copyFileSync(sourceDmg, outputDmg);
-writeFileSync(join(website, "SHA256SUMS.txt"), `${checksum}  downloads/${dmgName}\n`);
+writeFileSync(join(website, "SHA256SUMS.txt"), `${checksum}  downloads/${portableDmgName}\n`);
 
 writeFileSync(join(website, "index.html"), page(`LANPilot Audit ${version}`, `<h1>LANPilot Audit ${version}</h1>
 <p>Authorized LAN governance and exposure assessment for small-business networks.</p>
-<p><a class="button" href="downloads/${encodeURIComponent(dmgName)}">Download for Apple silicon</a></p>
-<p class="notice"><strong>Internal testing build.</strong> This build is ad-hoc signed, not notarized, and Apple Developer ID signing is pending. macOS may show a security warning. Verify the SHA-256 checksum before opening it.</p>
+<p><a class="button" href="downloads/${encodeURIComponent(portableDmgName)}">Download for Apple silicon</a></p>
+<p class="good"><strong>Signed and notarized.</strong> This DMG is Developer ID signed, Apple notarized, stapled, and Gatekeeper accepted. Verify the SHA-256 checksum before opening it.</p>
 
 <section><h2>Download instructions</h2>
 <p><strong>English:</strong> Download the DMG, verify its SHA-256 checksum, open it, and drag LANPilot Audit to Applications.</p>
@@ -38,14 +39,14 @@ writeFileSync(join(website, "index.html"), page(`LANPilot Audit ${version}`, `<h
 <p><strong>한국어:</strong> DMG를 다운로드하고 SHA-256을 확인한 뒤 열어서 LANPilot Audit를 Applications로 이동하세요.</p></section>
 
 <section><h2>macOS security warning</h2>
-<p><strong>English:</strong> The warning appears because this internal build is not yet Developer ID signed or notarized. After verifying SHA-256, use Finder's Open action for authorized internal testing. A formally signed and notarized build will reduce these warnings.</p>
-<p><strong>简体中文：</strong> 当前内部测试版尚未完成 Developer ID 签名和公证，因此会出现安全警告。验证 SHA-256 后，可在 Finder 中使用“打开”进行授权内部测试。正式签名公证后，警告会减少。</p>
-<p><strong>日本語：</strong> この内部テスト版は Developer ID 署名および公証が未完了のため、警告が表示されます。SHA-256 を確認後、Finder の「開く」から承認済み内部テストに使用してください。</p>
-<p><strong>한국어:</strong> 이 내부 테스트 빌드는 Developer ID 서명 및 공증이 완료되지 않아 경고가 표시됩니다. SHA-256 확인 후 Finder의 열기를 사용해 승인된 내부 테스트를 진행하세요.</p></section>
+<p><strong>English:</strong> If macOS shows a warning, confirm that the DMG is from the GitHub Release, verify SHA-256, and open it through Finder. The v${version} release is Developer ID signed, notarized, stapled, and Gatekeeper accepted.</p>
+<p><strong>简体中文：</strong> 如果 macOS 显示安全提示，请确认 DMG 来自 GitHub Release，验证 SHA-256 后再通过 Finder 打开。v${version} 已完成 Developer ID 签名、公证、staple，且 Gatekeeper accepted。</p>
+<p><strong>日本語：</strong> macOS の警告が表示された場合は、DMG が GitHub Release 由来であることを確認し、SHA-256 を検証してから Finder で開いてください。v${version} は Developer ID 署名、公証、staple 済みで、Gatekeeper accepted です。</p>
+<p><strong>한국어:</strong> macOS 경고가 표시되면 DMG가 GitHub Release에서 받은 파일인지 확인하고 SHA-256을 검증한 뒤 Finder로 여세요. v${version} 릴리스는 Developer ID 서명, 공증, staple 완료 및 Gatekeeper accepted 상태입니다.</p></section>
 
 <section><h2>Verify SHA-256</h2>
 <pre>cd ~/Downloads
-shasum -a 256 "LANPilot Audit_${version}_aarch64.dmg"</pre>
+shasum -a 256 "${portableDmgName}"</pre>
 <p>Expected value: <code>${checksum}</code></p></section>
 
 <section><h2>Governance capabilities</h2>
@@ -65,8 +66,8 @@ writeFileSync(join(website, "privacy.html"), page("LANPilot Audit Privacy", `<h1
 <ul><li>Audit data is stored on the user's Mac.</li><li>The user controls ZIP export.</li><li>No credential testing or unauthorized login.</li><li>No network configuration changes.</li></ul>`));
 
 writeFileSync(join(website, "release-notes.html"), page(`LANPilot Audit ${version} Release Notes`, `<h1>LANPilot Audit ${version}</h1>
-<p>Internal QA and release-hardening update for the governance toolbox, localized views, installed-app validation, fixture coverage, security boundary checks, and remote release verification.</p>
-<p>Authorization controls and the existing safety boundary remain unchanged.</p>
-<p>Distribution status: ad-hoc signed, not notarized, internal testing build. Developer ID signing is pending.</p>`));
+<p>Network Reliability release with Network Environment Check, fault localization, troubleshooting advice, retest workflow, overlay / proxy / VPN detection, DNS Inspector, Gateway Health, DHCP Inspector, Internet Path Timing, Local Listening Services Review, Baseline & Snapshot Compare, and Redacted Support Bundle.</p>
+<p>Authorization controls and the existing safety boundary remain unchanged: local-first, no credential testing, no unauthorized login, no network configuration changes, and no cloud upload.</p>
+<p>Distribution status: Developer ID signed, Apple notarized, stapled, and Gatekeeper accepted.</p>`));
 
 console.log(`Website release: ${website}`);
