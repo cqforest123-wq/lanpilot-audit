@@ -22,5 +22,6 @@
 - [ ] `npm run release:verify`
 - [ ] `npm run gatekeeper:check`
 - [ ] Check signing/notarization credentials before public distribution
-- [ ] Run `Public Notarized Release` and verify the prerelease is promoted
+- [ ] Run `Public Notarized Release` or the approved local Developer ID notarization flow
+- [ ] Verify the public GitHub Release contains the notarized DMG and SHA256SUMS
 - [ ] Confirm no audit data upload capability exists
