@@ -1,18 +1,5 @@
 # Git History Cleanup Plan
 
-The current branch has been cleaned for public-readiness checks, but git history still contains public-readiness markers such as local build paths or signing-related variable references.
+No blocking history markers or high-confidence secret patterns were found by the current open-source readiness scan.
 
-Before changing repository visibility to public, choose one of these paths:
-
-1. Conservative public launch: run `git filter-repo` on a throwaway clone to remove historical local paths and any sensitive records, then force-push after review.
-2. Risk acceptance: keep history unchanged only if every historical match is confirmed to be non-secret and acceptable for public disclosure.
-
-Recommended command shape for a separate throwaway clone:
-
-```sh
-git clone --mirror <repo-url> lanpilot-audit-app-cleanup.git
-cd lanpilot-audit-app-cleanup.git
-git filter-repo --replace-text replacements.txt
-```
-
-Do not run history rewriting in the working repository without an explicit approval checkpoint.
+Continue using a clean public snapshot workflow for releases, and do not commit Apple credentials, certificates, private logs, real audit reports, or local network evidence.

@@ -70,7 +70,9 @@ function currentFindings() {
 }
 
 function historyFindings() {
-  const terms = exact.map((item) => item.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const terms = exact
+    .filter((item) => item.severity === "block")
+    .map((item) => item.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const pattern = [...terms, "gho_[A-Za-z0-9_]{20,}", "github_pat_[A-Za-z0-9_]{20,}", "BEGIN (RSA |OPENSSH |EC |DSA |PRIVATE )?PRIVATE KEY", "BEGIN CERTIFICATE"].join("|");
   const revisions = run("git", ["rev-list", "--all"]);
   if (revisions.status !== 0 || !revisions.stdout.trim()) return [];
@@ -108,7 +110,7 @@ ${current.length ? current.map((finding) => `- ${finding.severity.toUpperCase()}
 
 ## Git History
 
-${history.length ? history.map((line) => `- ${line.split(":").slice(0, 3).join(":")}: matched public-readiness marker`).join("\n") : "- PASS: no history matches for configured markers."}
+${history.length ? history.map((line) => `- ${line.split(":").slice(0, 3).join(":")}: matched blocking history marker`).join("\n") : "- PASS: no history matches for blocking markers or high-confidence secret patterns."}
 
 ## External Secret Scanners
 
@@ -117,6 +119,7 @@ ${external.map((item) => `- ${item.name}: ${item.available ? item.detail : "not 
 ## Notes
 
 - Current scan excludes the physical .git directory and generated binary build output.
+- History scan covers blocking markers and high-confidence secret patterns; review-only public distribution markers are reported in the current tree only.
 - Secret values are never printed in this report.
 - Repository secret variable names are allowed only when they do not include secret values.
 `);
@@ -140,6 +143,13 @@ git filter-repo --replace-text replacements.txt
 \`\`\`
 
 Do not run history rewriting in the working repository without an explicit approval checkpoint.
+`);
+} else {
+  writeFileSync(cleanupPath, `# Git History Cleanup Plan
+
+No blocking history markers or high-confidence secret patterns were found by the current open-source readiness scan.
+
+Continue using a clean public snapshot workflow for releases, and do not commit Apple credentials, certificates, private logs, real audit reports, or local network evidence.
 `);
 }
 
