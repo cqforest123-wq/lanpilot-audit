@@ -1,0 +1,42 @@
+{
+  "profile": "Home LAN",
+  "physicalLan": {
+    "activeInterface": "en5",
+    "interfaceKind": "wired",
+    "ipv4": "192.0.2.24",
+    "subnetMask": "255.255.255.0",
+    "dhcpOk": true,
+    "dhcpServer": "192.0.2.1",
+    "dhcpRouter": "192.0.2.1",
+    "dhcpDns": ["192.0.2.1"],
+    "gatewayIp": "192.0.2.1",
+    "gatewayPingLossPct": 0,
+    "gatewayPingAvgMs": 2,
+    "gatewayPingJitterMs": 1,
+    "gatewayDnsMs": 18,
+    "selfAssignedAddress": false,
+    "multipleActiveInterfaces": false
+  },
+  "localControlPlane": {
+    "systemDnsServers": ["192.0.2.1"],
+    "scopedResolvers": [],
+    "resolverSummary": "DNS timing normal",
+    "listeningServices": []
+  },
+  "overlay": {
+    "defaultRouteInterface": "en5",
+    "utunInterfaces": [],
+    "stashDetected": false,
+    "tailscaleRunning": false,
+    "multipleOverlayComponents": false,
+    "dnsViaOverlay": false
+  },
+  "external": {
+    "publicIp": "203.0.113.24",
+    "targets": [
+      { "group": "apple", "url": "https://www.apple.com", "dnsMs": 20, "tcpConnectMs": 1300, "tlsMs": 1800, "ttfbMs": 2600, "totalMs": 6500, "status": 200, "failed": false },
+      { "group": "cdn", "url": "https://www.cloudflare.com", "dnsMs": 18, "tcpConnectMs": 1200, "tlsMs": 1700, "ttfbMs": 2400, "totalMs": 6200, "status": 200, "failed": false }
+    ]
+  },
+  "rawEvidenceRefs": ["network-environment-evidence.json"]
+}

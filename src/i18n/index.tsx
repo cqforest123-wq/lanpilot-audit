@@ -7,9 +7,10 @@ import { supportedLocales, type Locale, type Messages } from "./types";
 import { workflowMessages } from "./workflow";
 import { toolboxMessages } from "./toolbox";
 import { remediationMessages } from "./remediation";
+import { networkReliabilityMessages } from "./network-reliability";
 
 const localeMessages: Record<Locale, Messages> = { en, "zh-CN": zhCN, "zh-TW": zhTW, ja, ko, de, fr, es, "pt-BR": ptBR, it, nl };
-export const messages = Object.fromEntries(supportedLocales.map((locale) => [locale, { ...localeMessages[locale], ...workflowMessages[locale], ...toolboxMessages[locale], ...remediationMessages[locale] }])) as Record<Locale, Messages>;
+export const messages = Object.fromEntries(supportedLocales.map((locale) => [locale, { ...localeMessages[locale], ...workflowMessages[locale], ...toolboxMessages[locale], ...remediationMessages[locale], ...networkReliabilityMessages[locale] }])) as Record<Locale, Messages>;
 export function resolveLocale(value?: string | null): Locale {
   const raw = (value || "").replace("_", "-");
   if (/^zh($|-Hans|-CN)/i.test(raw)) return "zh-CN";

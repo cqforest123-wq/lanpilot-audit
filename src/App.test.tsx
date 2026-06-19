@@ -207,6 +207,27 @@ describe("audit authorization and failure flow", () => {
     expect(screen.getByRole("button", { name: "Confirm Authorization" })).toBeDisabled();
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
+
+  it("runs the fixed Network Reliability check only after local authorization", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "authorize_audit") return Promise.resolve();
+      if (command === "run_network_reliability_check") return Promise.resolve(networkReliabilityFixture);
+      if (command === "open_network_reliability_artifact") return Promise.resolve();
+      return Promise.resolve(engineStatus);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Network Reliability" }));
+    await user.type(screen.getByLabelText(/Project name/), "Reliability check");
+    for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
+    await user.click(screen.getByRole("button", { name: "Run Network Check" }));
+
+    expect(await screen.findByText("Current network path")).toBeVisible();
+    expect(screen.getAllByText("Mac -> en0 -> 192.0.2.1 -> ISP -> Internet").length).toBeGreaterThan(0);
+    expect(invokeMock).toHaveBeenCalledWith("run_network_reliability_check");
+    expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
+  });
 });
 
 describe("localization", () => {
@@ -268,6 +289,59 @@ const localizedReportFixture = {
     { severity: "Medium", asset: "192.168.50.90", category: "Remote", finding: "Remote administration service tcp/5900 is reachable", recommended_action: "Restrict remote administration", status: "open" },
   ],
   summary: { highCount: 2, mediumCount: 1, lowCount: 1, reachableClients: 14, unreachableClients: 2, openServiceHosts: 3, gatewayPostureStatus: "Services observed" },
+};
+
+const networkReliabilityFixture = {
+  summary: {
+    overallStatus: "healthy",
+    physicalLanStatus: "healthy",
+    dnsStatus: "healthy",
+    overlayStatus: "healthy",
+    externalPathStatus: "healthy",
+    faultDomain: "none",
+    faultPoint: "No clear fault point detected.",
+    currentPath: "Mac -> en0 -> 192.0.2.1 -> ISP -> Internet",
+    impact: "No immediate user-visible impact is indicated.",
+    evidence: ["Gateway is reachable.", "External timing is normal."],
+    remediationAdvice: ["Save this result as a baseline.", "Retest after path changes."],
+    retestPlan: ["Run the same check after network changes."],
+    rawEvidenceRefs: ["network-environment-evidence.json"],
+  },
+  evidence: {
+    profile: "Home LAN",
+    physicalLan: {
+      activeInterface: "en0",
+      interfaceKind: "wifi",
+      ipv4: "192.0.2.20",
+      dhcpOk: true,
+      gatewayIp: "192.0.2.1",
+      gatewayPingLossPct: 0,
+      gatewayPingAvgMs: 3,
+      gatewayDnsMs: 20,
+      selfAssignedAddress: false,
+    },
+    localControlPlane: {
+      systemDnsServers: ["192.0.2.1"],
+      scopedResolvers: [],
+      resolverSummary: "Gateway DNS",
+      listeningServices: [],
+    },
+    overlay: {
+      defaultRouteInterface: "en0",
+      utunInterfaces: [],
+      stashDetected: false,
+      tailscaleRunning: false,
+      multipleOverlayComponents: false,
+      dnsViaOverlay: false,
+    },
+    external: {
+      targets: [{ group: "apple", url: "https://www.apple.com", totalMs: 800, status: 200, failed: false }],
+    },
+    rawEvidenceRefs: ["network-environment-evidence.json"],
+  },
+  reportMarkdown: "# Network Reliability Report",
+  supportBundlePath: "/Users/test/lanpilot-audit-latest/08-network-reliability/network-environment-redacted-support-bundle.zip",
+  outputDirectory: "/Users/test/lanpilot-audit-latest/08-network-reliability",
 };
 
 describe("localized report view", () => {

@@ -1,17 +1,19 @@
 # Open Source Security Scan Report
 
 - Current tree blockers: 0
-- Current tree review items: 1
-- Git history matches: 0
+- Current tree review items: 2
+- Git history matches: 2
 - External tools: gitleaks: not installed; trufflehog: not installed
 
 ## Current Tree
 
 - REVIEW: docs/release/gatekeeper-check.md (Developer ID personal identity)
+- REVIEW: src-tauri/src/lib.rs (MAC address)
 
 ## Git History
 
-- PASS: no history matches for configured markers.
+- 886bec88bd0898f0580ca2488f093b680dbd7bea:docs/release/gatekeeper-check.md:37: matched public-readiness marker
+- 886bec88bd0898f0580ca2488f093b680dbd7bea:docs/release/gatekeeper-check.md:68: matched public-readiness marker
 
 ## External Secret Scanners
 
