@@ -1,0 +1,28 @@
+{
+  "scenario": "stash_tun_healthy_lan",
+  "networkPath": "Mac -> en5 -> 192.0.2.1 -> Stash TUN / utun15 -> Proxy Rules -> Proxy Exit -> Internet",
+  "interface": "en5",
+  "localIp": "192.0.2.24",
+  "gateway": "192.0.2.1",
+  "gatewayLatencyMs": 2.4,
+  "gatewayLossPct": 0,
+  "dhcpDns": [
+    "192.0.2.1"
+  ],
+  "systemDns": [
+    "1.0.0.1",
+    "198.51.100.53"
+  ],
+  "defaultRoute": "utun15",
+  "proxyRange19818": true,
+  "stash": "active",
+  "tailscale": "stopped",
+  "faultPoint": "Physical LAN is healthy; internet path is handled by Stash TUN.",
+  "advice": [
+    "Check current Stash node latency",
+    "Review proxy rules",
+    "Review proxy DNS policy",
+    "Do not enable Tailscale Exit Node and Stash TUN at the same time",
+    "Retest after changes"
+  ]
+}

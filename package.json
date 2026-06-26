@@ -1,12 +1,13 @@
 {
   "name": "lanpilot-audit-app",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "test:network-doctor": "vitest run src/network-doctor.test.ts",
     "test:i18n": "vitest run src/i18n/completeness.test.ts",
     "typecheck": "tsc --noEmit",
     "security:check": "node scripts/check-security-keywords.mjs",
@@ -23,7 +24,7 @@
     "version:check": "node scripts/check-version-consistency.mjs",
     "engine:sync": "node scripts/sync-engine.mjs",
     "engine:sync:check": "node scripts/sync-engine.mjs --check",
-    "check:core": "npm run version:check && npm run engine:sync:check && npm run workflow:check && npm run typecheck && npm run script:check && npm run ui-localization:check && npm run i18n:strict-check && npm run i18n:visible-check && cargo check --locked --manifest-path src-tauri/Cargo.toml && npm run security:check && npm run security:deep-check && npm run qa:governance-fixtures && npm audit --omit=dev --audit-level=high && npm run test:i18n && npm test && cargo test --locked --manifest-path src-tauri/Cargo.toml && cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "check:core": "npm run version:check && npm run engine:sync:check && npm run workflow:check && npm run typecheck && npm run script:check && npm run ui-localization:check && npm run i18n:strict-check && npm run i18n:visible-check && cargo check --locked --manifest-path src-tauri/Cargo.toml && npm run security:check && npm run security:deep-check && npm run qa:governance-fixtures && npm audit --omit=dev --audit-level=high && npm run test:i18n && npm run test:network-doctor && npm test && cargo test --locked --manifest-path src-tauri/Cargo.toml && cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
     "check": "node scripts/run-check.mjs",
     "public:check": "node scripts/check-public-readiness.mjs",
     "docs:screenshots": "node scripts/capture-demo-screenshots.mjs",

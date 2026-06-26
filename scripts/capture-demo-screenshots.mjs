@@ -38,6 +38,26 @@ const screenshotTargets = [
     file: "screenshot-remediation.png",
     html: renderRemediation(),
   },
+  {
+    name: "dashboard-overview",
+    file: "dashboard-overview.png",
+    html: renderDashboardOverview(),
+  },
+  {
+    name: "network-path-map",
+    file: "network-path-map.png",
+    html: renderNetworkPathMap(),
+  },
+  {
+    name: "latency-diagnostics",
+    file: "latency-diagnostics.png",
+    html: renderLatencyDiagnostics(),
+  },
+  {
+    name: "troubleshooting-advice-zh",
+    file: "troubleshooting-advice-zh.png",
+    html: renderTroubleshootingAdviceZh(),
+  },
 ];
 
 rmSync(renderDir, { recursive: true, force: true });
@@ -246,6 +266,103 @@ function renderRemediation() {
       </section>
     `,
   });
+}
+
+function renderDashboardOverview() {
+  return shellPage({
+    title: "Dashboard overview",
+    subtitle: "Synthetic v1.6.1 network dashboard.",
+    accent: "#2f7d5a",
+    content: `
+      <section class="diagnostic-dashboard">
+        <aside class="side-nav product-nav">
+          <strong>LANPilot Audit v1.6.1</strong>
+          <span class="nav-active">Overview</span><span>Network Check</span><span>Governance Audit</span><span>Reports</span><span>Remediation</span>
+        </aside>
+        <main>
+          <div class="report-header">
+            <div><div class="eyebrow">Local-first diagnostics</div><h1>Network path at a glance</h1><p>Synthetic demo data. Physical LAN is healthy while Stash TUN controls the external path.</p></div>
+            <div class="storage-badge">No cloud upload</div>
+          </div>
+          <div class="dashboard-cards">
+            ${statusCard("Physical LAN", "en5 / 192.0.2.24", "Healthy", "good")}
+            ${statusCard("DNS", "System DNS via utun15", "Warning", "warn")}
+            ${statusCard("Overlay", "Stash TUN active", "Warning", "warn")}
+          </div>
+          ${pathMapHtml(["Mac", "en5 / 192.0.2.24", "Gateway 192.0.2.1", "Stash TUN utun15", "Proxy Exit", "Internet"])}
+          <div class="fault-card"><strong>Fault point</strong><span>Physical LAN is normal. If external access is slow, inspect Stash node latency, rules, DNS policy, and proxy exit.</span></div>
+        </main>
+      </section>
+    `,
+  });
+}
+
+function renderNetworkPathMap() {
+  return shellPage({
+    title: "Network path map",
+    subtitle: "Synthetic path map with status nodes.",
+    accent: "#5267a8",
+    content: `
+      <section class="visual-panel">
+        <div class="eyebrow">Network Path Map</div>
+        <h1>Mac → physical LAN → overlay → internet</h1>
+        ${pathMapHtml(["Mac", "Physical Interface: en5", "Local Gateway: 192.0.2.1", "Stash TUN: utun15 / 198.18.0.1", "Proxy Rules", "Proxy Exit", "Internet"])}
+        <div class="legend-row"><span class="legend good">Healthy</span><span class="legend warn">Warning</span><span class="legend bad">Critical</span><span class="legend gray">Unknown</span></div>
+      </section>
+    `,
+  });
+}
+
+function renderLatencyDiagnostics() {
+  const rows = [
+    ["Gateway 192.0.2.1", "2.4 ms | 0% loss | Healthy", 8, "good"],
+    ["Gateway DNS", "5 ms | Healthy", 10, "good"],
+    ["System DNS via utun15", "220 ms | Warning", 48, "warn"],
+    ["GitHub HTTPS", "2.4 s | Warning", 62, "warn"],
+  ];
+  return shellPage({
+    title: "Latency diagnostics",
+    subtitle: "Synthetic latency visualization.",
+    accent: "#b35c2e",
+    content: `
+      <section class="visual-panel">
+        <div class="eyebrow">Latency Visualization</div>
+        <h1>Where the path gets slow</h1>
+        <div class="latency-demo">${rows.map(([label, meta, width, tone]) => `
+          <div class="lat-row"><div><strong>${label}</strong><span>${meta}</span></div><div class="bar"><i class="${tone}" style="width:${width}%"></i></div></div>
+        `).join("")}</div>
+      </section>
+    `,
+  });
+}
+
+function renderTroubleshootingAdviceZh() {
+  return shellPage({
+    title: "中文处理建议",
+    subtitle: "Synthetic Chinese troubleshooting advice.",
+    accent: "#2f6f73",
+    content: `
+      <section class="visual-panel zh-panel">
+        <div class="eyebrow">网络体检</div>
+        <h1>故障点与处理建议</h1>
+        <div class="fault-card"><strong>故障点</strong><span>物理网络正常，当前上网路径由 Stash TUN 接管。如果外网慢，优先检查代理层。</span></div>
+        <div class="advice-grid">
+          ${["检查 Stash 当前节点延迟", "检查规则分流", "检查代理 DNS 策略", "不要同时启用 Tailscale Exit Node 和 Stash TUN", "处理后重新复测"].map((item) => `<div><span>✓</span>${item}</div>`).join("")}
+        </div>
+        <details><summary>Raw Evidence</summary><pre>原始证据默认折叠；截图使用合成演示数据。</pre></details>
+      </section>
+    `,
+  });
+}
+
+function statusCard(title, value, status, tone) {
+  return `<div class="status-card"><span>${title}</span><strong>${value}</strong><em class="${tone}">${status}</em></div>`;
+}
+
+function pathMapHtml(nodes) {
+  return `<div class="path-map">${nodes.map((node, index) => `
+    <div class="path-step ${index === 3 || index === 4 ? "warn" : "good"}"><b>${escapeHtml(node)}</b></div>
+  `).join("")}</div>`;
 }
 
 function shellPage({ title, subtitle, accent, content }) {
@@ -575,6 +692,139 @@ function shellPage({ title, subtitle, accent, content }) {
       margin-top: 18px;
     }
     .retest-plan div { display: grid; gap: 5px; }
+    .diagnostic-dashboard {
+      height: 660px;
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: white;
+      overflow: hidden;
+    }
+    .product-nav span { font-weight: 700; }
+    .dashboard-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .status-card {
+      display: grid;
+      gap: 8px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdfc;
+    }
+    .status-card span { color: var(--muted); font-weight: 700; }
+    .status-card strong { font-size: 18px; }
+    .status-card em, .legend {
+      width: fit-content;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .good { color: var(--good); background: rgba(47,125,90,0.12); }
+    .warn { color: var(--warn); background: rgba(166,107,22,0.14); }
+    .bad { color: var(--bad); background: rgba(189,63,50,0.12); }
+    .gray { color: #657180; background: #edf1f3; }
+    .path-map {
+      display: grid;
+      gap: 10px;
+      margin: 20px 0;
+    }
+    .path-step {
+      position: relative;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdfc;
+    }
+    .path-step + .path-step::before {
+      content: "";
+      position: absolute;
+      top: -11px;
+      left: 24px;
+      width: 2px;
+      height: 10px;
+      background: #cfd9de;
+    }
+    .fault-card {
+      display: grid;
+      gap: 8px;
+      padding: 18px 20px;
+      border: 1px solid rgba(166,107,22,0.28);
+      border-radius: 12px;
+      background: #fffaf0;
+      color: #59442a;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+    .visual-panel {
+      height: 660px;
+      padding: 42px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: white;
+    }
+    .legend-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .latency-demo {
+      display: grid;
+      gap: 20px;
+      margin-top: 36px;
+    }
+    .lat-row {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      align-items: center;
+    }
+    .lat-row div:first-child { display: grid; gap: 4px; }
+    .lat-row span { color: var(--muted); }
+    .bar {
+      height: 18px;
+      border-radius: 999px;
+      background: #edf1f3;
+      overflow: hidden;
+    }
+    .bar i {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+    }
+    .bar .good { background: #2f7d5a; }
+    .bar .warn { background: #d48a23; }
+    .bar .bad { background: #bd3f32; }
+    .zh-panel h1 { font-size: 40px; }
+    .advice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 20px 0;
+    }
+    .advice-grid div {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdfc;
+      font-weight: 800;
+    }
+    .advice-grid span { color: var(--good); margin-right: 8px; }
+    details {
+      margin-top: 20px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      background: #fbfdfc;
+    }
+    summary { font-weight: 800; }
+    pre { white-space: pre-wrap; color: var(--muted); font-size: 13px; }
   </style>
 </head>
 <body>

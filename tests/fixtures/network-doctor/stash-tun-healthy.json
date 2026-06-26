@@ -1,0 +1,14 @@
+{
+  "profile": "Stash TUN healthy",
+  "mode": "quick",
+  "abnormal": false,
+  "observations": {
+    "route": { "defaultInterface": "utun15", "physicalInterface": "en5", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": true },
+    "overlays": [
+      { "interface": "utun15", "ownerType": "proxy", "ownerName": "Stash", "confidence": 0.94, "evidence": ["198.18.0.1 address", "Stash process active", "Stash ports 7890 and 9090 listening"], "controlsDefaultRoute": true, "controlsDns": true, "healthy": true }
+    ],
+    "pathTimings": [
+      { "name": "System path", "pathType": "system", "publicIp": "203.0.113.45", "country": "Demo", "asn": "AS64510", "provider": "Demo Proxy Exit", "responseMs": 780, "success": true }
+    ]
+  }
+}

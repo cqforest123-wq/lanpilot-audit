@@ -1,0 +1,9 @@
+{
+  "profile": "Gateway high jitter",
+  "mode": "deep",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "gateway",
+  "observations": {
+    "gateway": { "sampleCount": 150, "avgMs": 18, "minMs": 2, "maxMs": 170, "stddevMs": 46, "jitterMs": 48, "lossPct": 0 }
+  }
+}

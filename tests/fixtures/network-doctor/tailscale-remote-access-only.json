@@ -1,0 +1,11 @@
+{
+  "profile": "Tailscale remote access only",
+  "mode": "quick",
+  "abnormal": false,
+  "observations": {
+    "overlays": [
+      { "interface": "utun8", "ownerType": "tailscale", "ownerName": "Tailscale", "confidence": 0.9, "evidence": ["100.64.0.0/10 route present", "Exit Node disabled"], "controlsDefaultRoute": false, "controlsDns": false, "healthy": true }
+    ],
+    "route": { "defaultInterface": "en5", "physicalInterface": "en5", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": false }
+  }
+}

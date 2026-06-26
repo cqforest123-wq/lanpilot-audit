@@ -1,0 +1,14 @@
+{
+  "profile": "TCP timeout",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "transport_tcp",
+  "observations": {
+    "transport": [
+      { "name": "Demo business endpoint", "protocol": "tcp", "host": "app.example.test", "port": 443, "state": "timeout", "latencyMs": null }
+    ],
+    "applications": [
+      { "group": "Business", "url": "https://app.example.test", "state": "timeout", "dnsMs": 18, "tcpMs": null, "tlsMs": null, "ttfbMs": null, "totalMs": null, "status": null, "remoteIp": "203.0.113.44" }
+    ]
+  }
+}

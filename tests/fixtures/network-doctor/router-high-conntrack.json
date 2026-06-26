@@ -1,0 +1,9 @@
+{
+  "profile": "Router high conntrack",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "router_health",
+  "observations": {
+    "routerHealth": { "enabled": true, "profile": "openwrt", "cpuLoad": 1.2, "cpuCores": 4, "memoryUsedPct": 70, "storageUsedPct": 48, "conntrackUsedPct": 94, "wanState": "up", "evidence": ["Connection table usage is above the configured healthy range."] }
+  }
+}

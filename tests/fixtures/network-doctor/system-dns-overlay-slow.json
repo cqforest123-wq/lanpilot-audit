@@ -1,0 +1,19 @@
+{
+  "profile": "System DNS overlay slow",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "system_dns",
+  "observations": {
+    "dns": {
+      "systemDnsServers": ["198.51.100.53"],
+      "resolverChecks": [
+        { "name": "Gateway DNS", "address": "192.0.2.1", "icmpReachable": true, "queryStatus": "ok", "responseMs": 8, "resolvedIp": "203.0.113.10", "viaOverlay": false },
+        { "name": "System overlay DNS", "address": "198.51.100.53", "icmpReachable": null, "queryStatus": "ok", "responseMs": 760, "resolvedIp": "203.0.113.10", "viaOverlay": true }
+      ]
+    },
+    "route": { "defaultInterface": "utun15", "physicalInterface": "en5", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": true },
+    "overlays": [
+      { "interface": "utun15", "ownerType": "proxy", "ownerName": "Stash", "confidence": 0.94, "evidence": ["198.18.0.1 address", "Stash local ports observed"], "controlsDefaultRoute": true, "controlsDns": true, "healthy": true }
+    ]
+  }
+}

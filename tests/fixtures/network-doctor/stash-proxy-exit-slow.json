@@ -1,0 +1,18 @@
+{
+  "profile": "Stash proxy exit slow",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "overlay_proxy",
+  "observations": {
+    "route": { "defaultInterface": "utun15", "physicalInterface": "en5", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": true },
+    "overlays": [
+      { "interface": "utun15", "ownerType": "proxy", "ownerName": "Stash", "confidence": 0.94, "evidence": ["198.18.0.1 address", "Stash controls the system route", "External HTTPS is slow only through the proxy path"], "controlsDefaultRoute": true, "controlsDns": true, "healthy": false }
+    ],
+    "applications": [
+      { "group": "GitHub", "url": "https://github.com", "state": "reachable", "dnsMs": 260, "tcpMs": 700, "tlsMs": 1100, "ttfbMs": 2600, "totalMs": 5900, "status": 200, "remoteIp": "203.0.113.80" }
+    ],
+    "pathTimings": [
+      { "name": "Explicit proxy", "pathType": "explicit_proxy", "publicIp": "203.0.113.45", "country": "Demo", "asn": "AS64510", "provider": "Demo Proxy Exit", "responseMs": 5900, "success": true }
+    ]
+  }
+}

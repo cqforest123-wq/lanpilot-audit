@@ -1,0 +1,21 @@
+{
+  "scenario": "gateway_packet_loss",
+  "networkPath": "Mac -> en5 -> 192.0.2.1 -> ISP -> Internet",
+  "interface": "en5",
+  "localIp": "192.0.2.24",
+  "gateway": "192.0.2.1",
+  "gatewayLatencyMs": 85,
+  "gatewayLossPct": 12,
+  "systemDns": [
+    "192.0.2.1"
+  ],
+  "defaultRoute": "en5",
+  "stash": "stopped",
+  "tailscale": "stopped",
+  "faultPoint": "Local gateway or physical link instability detected.",
+  "advice": [
+    "Check cable or switch port",
+    "Check router load",
+    "Retest gateway ping before changing DNS or proxy settings"
+  ]
+}

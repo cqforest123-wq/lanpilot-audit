@@ -1,0 +1,12 @@
+{
+  "profile": "Wi-Fi high jitter",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "wifi_radio",
+  "observations": {
+    "physicalInterface": { "name": "en0", "kind": "wifi", "ipv4": "192.0.2.31" },
+    "wifi": { "active": true, "ssid": "Demo Wi-Fi", "rssiDbm": -70, "noiseDbm": -89, "snrDb": 19, "channel": 6, "band": "2.4GHz", "channelWidthMhz": 40, "associationChanges": 2 },
+    "gateway": { "sampleCount": 18, "avgMs": 18, "jitterMs": 44, "stddevMs": 41, "lossPct": 0 },
+    "route": { "defaultInterface": "en0", "physicalInterface": "en0", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": false }
+  }
+}

@@ -6,10 +6,12 @@ import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
 import type { NetworkReliabilityDiagnosis, NetworkReliabilityEvidence, ReliabilityStatus } from "./network-reliability";
+import { demoNetworkReliabilityRun } from "./demo-network-reliability";
+import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
 import packageJson from "../package.json";
 import "./App.css";
 
-type Page = "landing" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "networkReliability" | "report" | "compare" | "remediation" | "export" | "settings";
+type Page = "overview" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "networkCheck" | "report" | "compare" | "remediation" | "export" | "settings";
 type StepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 type AuditStepId =
   | "init_lab"
@@ -122,6 +124,7 @@ interface NetworkReliabilityRun {
   reportMarkdown: string;
   supportBundlePath: string;
   outputDirectory: string;
+  doctorMode?: DoctorMode;
 }
 
 interface AuditStep {
@@ -162,12 +165,13 @@ const formatDuration = (durationMs: number | undefined, pending: string): string
 
 function App() {
   const { t } = useI18n();
-  const [page, setPage] = useState<Page>("landing");
+  const [page, setPage] = useState<Page>("overview");
   const [auditRunning, setAuditRunning] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [auditInterface, setAuditInterface] = useState("");
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
+  const [networkResult, setNetworkResult] = useState<NetworkReliabilityRun | null>(null);
 
   const startAuthorization = () => {
     if (auditRunning) return;
@@ -182,29 +186,46 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("landing")}>
-          <span className="brand-mark">LP</span><span>LANPilot Audit</span>
+      <aside className="sidebar">
+        <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
+          <span className="brand-mark">LP</span>
+          <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
         </button>
-        <nav>
-          <button type="button" disabled={auditRunning} onClick={startAuthorization}>{t("navRun")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("assets")}>{t("navAssets")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("exposure")}>{t("navExposure")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("networkReliability")}>{t("navNetworkReliability")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("report")}>{t("navReport")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("compare")}>{t("navCompare")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("remediation")}>{t("navRemediation")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("export")}>{t("navExport")}</button>
-          <button type="button" disabled={auditRunning} onClick={() => navigate("settings")}>{t("navSettings")}</button>
-          <LanguageSelector />
+        <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
+          <NavButton active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
+          <NavButton active={page === "networkCheck"} disabled={auditRunning} onClick={() => navigate("networkCheck")} label={t("navNetworkCheck")} />
+          <NavButton active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
+          <NavButton active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
+          <NavButton active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
+          <NavButton active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+          <NavButton active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
         </nav>
-      </header>
+        <div className="sidebar-footer">
+          <LanguageSelector />
+          <span className="local-first-chip">{t("settings.noCloudUpload")}</span>
+        </div>
+      </aside>
 
-      <section className="page" aria-label={t("appName")}>
-        {page === "landing" && <LandingPage onStart={startAuthorization} onReport={() => navigate("report")} />}
+      <section className="workspace">
+        <header className="product-header">
+          <div>
+            <div className="eyebrow">{t("appName")} v{packageJson.version}</div>
+            <h1>{t("product.tagline")}</h1>
+          </div>
+          <StatusBadge status="healthy" label={t("product.localFirst")} />
+        </header>
+
+        <section className="page" aria-label={t("appName")}>
+        {page === "overview" && (
+          <OverviewPage
+            result={networkResult}
+            onNetworkCheck={() => navigate("networkCheck")}
+            onGovernanceAudit={startAuthorization}
+          />
+        )}
         {page === "authorization" && (
           <AuthorizationPage
-            onCancel={() => navigate("landing")}
+            onCancel={() => navigate("overview")}
             onConfirm={async (authorizationDetails) => {
               await invoke("authorize_audit", { projectName: authorizationDetails.projectName });
               setDetails(authorizationDetails);
@@ -233,30 +254,255 @@ function App() {
         {page === "report" && <ReportPage initialReport={latestReport} />}
         {page === "assets" && <GovernanceDataPage titleKey="toolbox.assets" descriptionKey="toolbox.assetsDescription" fields={["assetInventorySummary", "assetInventory", "localNetworkConfig"]} />}
         {page === "exposure" && <GovernanceDataPage titleKey="toolbox.exposure" descriptionKey="toolbox.exposureDescription" fields={["serviceExposureSummary", "serviceExposureMatrix", "mdnsServices", "webBaseline", "tlsCertificates"]} />}
-        {page === "networkReliability" && <NetworkReliabilityPage onRunningChange={setAuditRunning} />}
+        {page === "networkCheck" && <NetworkReliabilityPage onRunningChange={setAuditRunning} onComplete={setNetworkResult} />}
         {page === "compare" && <GovernanceDataPage titleKey="toolbox.compare" descriptionKey="toolbox.compareDescription" fields={["snapshotDiff", "governanceSummary"]} />}
         {page === "remediation" && <RemediationPage onRetest={startAuthorization} />}
         {page === "export" && <ExportPage />}
         {page === "settings" && <SettingsPage />}
+        </section>
       </section>
     </main>
   );
 }
 
-function LandingPage({ onStart, onReport }: { onStart: () => void; onReport: () => void }) {
-  const { t } = useI18n();
+function NavButton({ active, disabled, onClick, label }: { active: boolean; disabled: boolean; onClick: () => void; label: string }) {
+  return <button className={active ? "active" : ""} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
+}
+
+function OverviewPage({
+  result,
+  onNetworkCheck,
+  onGovernanceAudit,
+}: {
+  result: NetworkReliabilityRun | null;
+  onNetworkCheck: () => void;
+  onGovernanceAudit: () => void;
+}) {
+  const { locale, t } = useI18n();
+  const display = result ?? demoNetworkReliabilityRun;
+  const demo = !result;
+  const evidence = display.evidence;
+  const summary = display.summary;
+  const physical = evidence.physicalLan;
+  const overlay = evidence.overlay;
+
   return (
-    <section className="hero card">
-      <div className="eyebrow">{t("landingEyebrow")}</div>
-      <h1>{t("landingTitle")}</h1>
-      <p className="lead">{t("landingDescription")}</p>
-      <div className="actions">
-        <button className="primary" type="button" onClick={onStart}>{t("startAudit")}</button>
-        <button className="secondary" type="button" onClick={onReport}>{t("latestReport")}</button>
+    <section className="content-stack dashboard">
+      {demo && <p className="message demo-message">{t("overview.demoNotice")}</p>}
+      <div className="dashboard-grid">
+        <section className="card compact hero-panel">
+          <div className="panel-heading">
+            <span className="eyebrow">{t("overview.currentPath")}</span>
+            <StatusBadge status={summary.overallStatus} label={t(`reliability.status.${summary.overallStatus}`)} />
+          </div>
+          <NetworkPathMap summary={summary} evidence={evidence} />
+          <div className="actions">
+            <button className="primary" type="button" onClick={onNetworkCheck}>{t("button.startNetworkCheck")}</button>
+            <button className="secondary" type="button" onClick={onGovernanceAudit}>{t("button.runGovernanceAudit")}</button>
+          </div>
+        </section>
+        <section className="card compact diagnosis-panel">
+          <div className="panel-heading">
+            <span className="eyebrow">{t("overview.faultPoint")}</span>
+            <StatusBadge status={summary.faultDomain === "none" ? "healthy" : summary.overallStatus} label={t(`reliability.status.${summary.overallStatus}`)} />
+          </div>
+          <h2>{localizeReliabilityText(summary.faultPoint, locale)}</h2>
+          <p>{localizeReliabilityText(summary.impact, locale)}</p>
+          <Checklist title={t("overview.advice")} items={summary.remediationAdvice.slice(0, 5)} />
+        </section>
       </div>
-      <Guardrail />
+      <div className="overview-cards">
+        <MetricCard title={t("overview.physicalStatus")} status={summary.physicalLanStatus} rows={[
+          [t("reliability.interface"), physical.activeInterface || t("status.unknown")],
+          [t("overview.localIp"), physical.ipv4 ?? t("status.unknown")],
+          [t("reliability.gateway"), physical.gatewayIp ?? t("status.unknown")],
+          [t("reliability.gatewayLatency"), formatNullableMs(physical.gatewayPingAvgMs, t("status.unknown"))],
+          [t("reliability.gatewayLoss"), formatNullablePercent(physical.gatewayPingLossPct, t("status.unknown"))],
+        ]} />
+        <MetricCard title={t("overview.dnsStatus")} status={summary.dnsStatus} rows={[
+          [t("overview.dhcpDns"), (physical.dhcpDns ?? []).join(", ") || t("status.unknown")],
+          [t("reliability.systemDns"), evidence.localControlPlane.systemDnsServers.join(", ") || t("status.unknown")],
+          [t("overview.gatewayDns"), formatNullableMs(physical.gatewayDnsMs, t("status.unknown"))],
+          [t("overview.dnsJudgement"), overlay.dnsViaOverlay ? t("overview.dnsTakenByOverlay") : t("overview.dnsDirect")],
+        ]} />
+        <MetricCard title={t("overview.overlayStatus")} status={summary.overlayStatus} rows={[
+          ["Stash", overlay.stashDetected ? t("status.active") : t("status.stopped")],
+          ["Tailscale", overlay.tailscaleRunning ? t("status.active") : t("status.stopped")],
+          [t("reliability.defaultRoute"), overlay.defaultRouteInterface ?? t("status.unknown")],
+          ["198.18.0.0/16", overlay.hasProxyRange19818 ? t("status.detected") : t("status.notDetected")],
+        ]} />
+      </div>
+      <LatencyVisualization evidence={evidence} />
     </section>
   );
+}
+
+function StatusBadge({ status, label }: { status: ReliabilityStatus; label: string }) {
+  return <span className={`status-badge ${status}`}>{label}</span>;
+}
+
+function MetricCard({ title, status, rows }: { title: string; status: ReliabilityStatus; rows: [string, string][] }) {
+  const { t } = useI18n();
+  return (
+    <section className="card compact metric-card">
+      <div className="panel-heading">
+        <h2>{title}</h2>
+        <StatusBadge status={status} label={t(`reliability.status.${status}`)} />
+      </div>
+      <dl className="metric-list">
+        {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+      </dl>
+    </section>
+  );
+}
+
+function Checklist({ title, items }: { title: string; items: string[] }) {
+  const { locale, t } = useI18n();
+  return (
+    <div className="checklist">
+      <h3>{title}</h3>
+      {items.length === 0 ? <p className="muted">{t("status.unknown")}</p> : <ul>{items.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>}
+    </div>
+  );
+}
+
+type PathNode = { label: string; detail?: string; status: ReliabilityStatus };
+
+function NetworkPathMap({ summary, evidence }: { summary: NetworkReliabilityDiagnosis; evidence: NetworkReliabilityEvidence }) {
+  const { t } = useI18n();
+  const nodes = buildPathNodes(summary, evidence, t("status.unknown"), {
+    physicalInterface: t("path.physicalInterface"),
+    localGateway: t("path.localGateway"),
+    gateway: t("reliability.gateway"),
+    proxyRules: t("path.proxyRules"),
+    proxyExit: t("path.proxyExit"),
+    internet: t("path.internet"),
+    remotePath: t("path.remotePath"),
+    overlayUtun: t("path.overlayUtun"),
+    exitNode: t("path.exitNode"),
+    isp: t("path.isp"),
+  });
+  return (
+    <div className="network-path-map" aria-label={t("reliability.networkPathView")}>
+      {nodes.map((node, index) => (
+        <div className="path-node-wrap" key={`${node.label}-${index}`}>
+          {index > 0 && <div className="path-connector" aria-hidden="true" />}
+          <div className={`path-node ${node.status}`}>
+            <span className="status-dot" />
+            <strong>{node.label}</strong>
+            {node.detail && <small>{node.detail}</small>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildPathNodes(
+  summary: NetworkReliabilityDiagnosis,
+  evidence: NetworkReliabilityEvidence,
+  unknown: string,
+  labels: {
+    physicalInterface: string;
+    localGateway: string;
+    gateway: string;
+    proxyRules: string;
+    proxyExit: string;
+    internet: string;
+    remotePath: string;
+    overlayUtun: string;
+    exitNode: string;
+    isp: string;
+  },
+): PathNode[] {
+  const physical = evidence.physicalLan;
+  const overlay = evidence.overlay;
+  if (overlay.tailscaleRunning && overlay.tailscaleExitNode) {
+    return [
+      { label: "Mac", status: "healthy" },
+      { label: "Tailscale utun", detail: overlay.defaultRouteInterface ?? unknown, status: summary.overlayStatus },
+      { label: labels.exitNode, detail: evidence.external.publicIpOrg ?? unknown, status: summary.externalPathStatus },
+      { label: labels.internet, status: summary.externalPathStatus },
+    ];
+  }
+  if (overlay.stashDetected && overlay.stashTunDetected) {
+    return [
+      { label: "Mac", status: "healthy" },
+      { label: labels.physicalInterface, detail: `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`, status: summary.physicalLanStatus },
+      { label: labels.localGateway, detail: physical.gatewayIp ?? unknown, status: summary.physicalLanStatus },
+      { label: "Stash TUN", detail: `${overlay.defaultRouteInterface ?? unknown} / ${overlay.defaultRouteGateway ?? "198.18.0.1"}`, status: summary.overlayStatus },
+      { label: labels.proxyRules, status: summary.overlayStatus },
+      { label: labels.proxyExit, detail: evidence.external.publicIpOrg ?? unknown, status: summary.externalPathStatus },
+      { label: labels.internet, status: summary.externalPathStatus },
+    ];
+  }
+  if ((overlay.defaultRouteInterface ?? "").startsWith("utun")) {
+    return [
+      { label: "Mac", status: "healthy" },
+      { label: labels.physicalInterface, detail: `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`, status: summary.physicalLanStatus },
+      { label: labels.overlayUtun, detail: overlay.defaultRouteInterface ?? unknown, status: summary.overlayStatus },
+      { label: labels.remotePath, status: summary.externalPathStatus },
+      { label: labels.internet, status: summary.externalPathStatus },
+    ];
+  }
+  return [
+    { label: "Mac", status: "healthy" },
+    { label: labels.physicalInterface, detail: `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`, status: summary.physicalLanStatus },
+    { label: labels.gateway, detail: physical.gatewayIp ?? unknown, status: summary.physicalLanStatus },
+    { label: labels.isp, status: summary.externalPathStatus },
+    { label: labels.internet, status: summary.externalPathStatus },
+  ];
+}
+
+function LatencyVisualization({ evidence }: { evidence: NetworkReliabilityEvidence }) {
+  const { t } = useI18n();
+  const physical = evidence.physicalLan;
+  const firstTarget = evidence.external.targets[0];
+  const gatewayAverage = physical.gatewayPingAvgMs;
+  const jitter = physical.gatewayPingJitterMs;
+  const gatewayMin = typeof gatewayAverage === "number" && typeof jitter === "number" ? Math.max(0, gatewayAverage - jitter) : null;
+  const gatewayMax = typeof gatewayAverage === "number" && typeof jitter === "number" ? gatewayAverage + jitter : null;
+  const rows = [
+    { label: `${t("reliability.gateway")} ${physical.gatewayIp ?? ""}`.trim(), value: gatewayAverage, meta: `${t("latency.avg")} ${formatNullableMs(gatewayAverage, t("status.unknown"))} · ${t("latency.min")} ${formatNullableMs(gatewayMin, t("status.unknown"))} · ${t("latency.max")} ${formatNullableMs(gatewayMax, t("status.unknown"))} · ${formatNullablePercent(physical.gatewayPingLossPct, t("status.unknown"))} ${t("latency.loss")}`, status: physical.gatewayPingLossPct ? "warning" as ReliabilityStatus : "healthy" as ReliabilityStatus, max: 100 },
+    { label: t("latency.gatewayDns"), value: physical.gatewayDnsMs, meta: formatNullableMs(physical.gatewayDnsMs, t("status.unknown")), status: latencyStatus(physical.gatewayDnsMs, 100, 500), max: 500 },
+    { label: t("latency.systemDns"), value: firstTarget?.dnsMs, meta: `${formatNullableMs(firstTarget?.dnsMs, t("status.unknown"))} · ${evidence.overlay.defaultRouteInterface ?? t("status.unknown")}`, status: latencyStatus(firstTarget?.dnsMs, 300, 1000), max: 1000 },
+    { label: t("latency.tcpConnect"), value: firstTarget?.tcpConnectMs, meta: formatNullableMs(firstTarget?.tcpConnectMs, t("status.unknown")), status: latencyStatus(firstTarget?.tcpConnectMs, 1000, 3000), max: 3000 },
+    { label: t("latency.tls"), value: firstTarget?.tlsMs, meta: formatNullableMs(firstTarget?.tlsMs, t("status.unknown")), status: latencyStatus(firstTarget?.tlsMs, 1500, 4000), max: 4000 },
+    { label: t("latency.ttfb"), value: firstTarget?.ttfbMs, meta: formatNullableMs(firstTarget?.ttfbMs, t("status.unknown")), status: latencyStatus(firstTarget?.ttfbMs, 2000, 5000), max: 5000 },
+    { label: firstTarget?.url ?? t("latency.httpsTotal"), value: firstTarget?.totalMs, meta: formatNullableMs(firstTarget?.totalMs, t("status.unknown")), status: latencyStatus(firstTarget?.totalMs, 3000, 8000), max: 8000 },
+  ];
+  return (
+    <section className="card compact latency-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>{t("latency.title")}</h2>
+          <p className="muted">{t("latency.description")}</p>
+        </div>
+      </div>
+      <div className="latency-list">
+        {rows.map((row) => <LatencyRow key={row.label} {...row} />)}
+      </div>
+    </section>
+  );
+}
+
+function LatencyRow({ label, value, meta, status, max }: { label: string; value?: number | null; meta: string; status: ReliabilityStatus; max: number }) {
+  const { t } = useI18n();
+  const width = typeof value === "number" ? Math.max(2, Math.min(100, (value / max) * 100)) : 4;
+  return (
+    <div className="latency-row">
+      <div><strong>{label}</strong><span>{meta}</span></div>
+      <div className="latency-track"><span className={status} style={{ width: `${width}%` }} /></div>
+      <StatusBadge status={status} label={t(`reliability.status.${status}`)} />
+    </div>
+  );
+}
+
+function latencyStatus(value: number | null | undefined, warning: number, critical: number): ReliabilityStatus {
+  if (typeof value !== "number") return "unknown";
+  if (value >= critical) return "critical";
+  if (value >= warning) return "warning";
+  return "healthy";
 }
 
 function AuthorizationPage({
@@ -272,7 +518,7 @@ function AuthorizationPage({
   const [projectName, setProjectName] = useState("");
   const [site, setSite] = useState("");
   const [notes, setNotes] = useState("");
-  const [checks, setChecks] = useState([false, false, false, false]);
+  const [checks, setChecks] = useState([false, false, false, false, false]);
   const allChecked = checks.every(Boolean);
   const engineReady = Boolean(engine && (engine.scriptsReady || !engine.engineFound));
 
@@ -318,8 +564,9 @@ function AuthorizationPage({
         {[
           t("authorization.confirmAssessNetwork"),
           t("authorization.confirmOnlyApprovedScripts"),
-          t("authorization.confirmFixedInterface"),
+          t("authorization.confirmNoOffensiveActions"),
           t("authorization.confirmPointInTimeNoConfigChange"),
+          t("authorization.confirmCurrentInterface"),
         ].map((label, index) => (
           <label className="confirmation card compact" key={label}>
             <input type="checkbox" checked={checks[index]} onChange={(event) => toggleCheck(index, event.target.checked)} />
@@ -395,7 +642,10 @@ function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { de
     invoke<AuditInterface[]>("list_audit_interfaces")
       .then((items) => {
         setInterfaces(items);
-        if (!selected && items[0]) onSelect(items[0].name);
+        if (!selected) {
+          const preferred = pickPreferredAuditInterface(items);
+          if (preferred) onSelect(preferred.name);
+        }
       })
       .catch((value) => setError(errorMessage(value)));
   }, [selected, onSelect]);
@@ -405,9 +655,10 @@ function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { de
       <div className="card compact review-grid">
         <div><span>{t("interface.project")}</span><strong>{details.projectName}</strong></div>
         <div><span>{t("interface.siteOrganization")}</span><strong>{details.site || t("common.notProvided")}</strong></div>
-        <label><span>{t("interface.selectedInterface")}</span><select value={selected} onChange={(event) => onSelect(event.target.value)}>{interfaces.map((item) => <option value={item.name} key={item.name}>{item.name} · {item.ipv4}</option>)}</select></label>
         <div><span>{t("interface.executionMode")}</span><strong>{t("run.stopOnFailure")}</strong></div>
+        <div><span>{t("interface.selectionRule")}</span><strong>{t("interface.preferPhysical")}</strong></div>
       </div>
+      <NetworkInterfaceSelector interfaces={interfaces} selected={selected} onSelect={onSelect} mode="governance" />
       {error && <RawDetail detail={error} />}
       <Guardrail />
       <div className="actions">
@@ -416,6 +667,66 @@ function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { de
       </div>
     </section>
   );
+}
+
+function NetworkInterfaceSelector({
+  interfaces,
+  selected,
+  onSelect,
+  mode,
+}: {
+  interfaces: AuditInterface[];
+  selected: string;
+  onSelect: (value: string) => void;
+  mode: "governance" | "reliability";
+}) {
+  const { t } = useI18n();
+  const preferred = pickPreferredAuditInterface(interfaces);
+  return (
+    <section className="card compact interface-selector">
+      <div className="panel-heading">
+        <div>
+          <h2>{t("interface.selectorTitle")}</h2>
+          <p className="muted">{mode === "governance" ? t("interface.governanceHint") : t("interface.reliabilityHint")}</p>
+        </div>
+        <StatusBadge status={selected ? "healthy" : "unknown"} label={selected || t("status.unknown")} />
+      </div>
+      {interfaces.length === 0 ? <p className="message">{t("interface.noInterfaces")}</p> : (
+        <div className="interface-list">
+          {interfaces.map((item) => {
+            const overlay = isOverlayInterface(item.name);
+            const selectedItem = selected === item.name;
+            const recommended = preferred?.name === item.name && !overlay;
+            return (
+              <button className={selectedItem ? "interface-option active" : "interface-option"} type="button" key={item.name} onClick={() => onSelect(item.name)} disabled={mode === "governance" && overlay}>
+                <span>
+                  <strong>{recommended ? `${t("interface.autoSelected")} · ${item.name}` : item.name}</strong>
+                  <small>{interfaceKindLabel(item.name, t)} · {item.ipv4 || t("interface.noIpv4")}</small>
+                </span>
+                <StatusBadge status={overlay ? "warning" : item.ipv4 ? "healthy" : "unknown"} label={overlay ? t("interface.overlayNotRecommended") : item.ipv4 ? t("interface.physicalCandidate") : t("interface.notAssociated")} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function pickPreferredAuditInterface(interfaces: AuditInterface[]): AuditInterface | undefined {
+  return interfaces.find((item) => !isOverlayInterface(item.name) && item.ipv4) ?? interfaces.find((item) => !isOverlayInterface(item.name)) ?? interfaces[0];
+}
+
+function isOverlayInterface(name: string): boolean {
+  return name.startsWith("utun") || name.startsWith("tun") || name.startsWith("tap");
+}
+
+function interfaceKindLabel(name: string, t: (key: string) => string): string {
+  if (isOverlayInterface(name)) return t("interface.kindOverlay");
+  if (name === "en0") return t("interface.kindWifi");
+  if (/^en[1-9]\d*$/.test(name)) return t("interface.kindPhysical");
+  if (name.startsWith("bridge")) return t("interface.kindBridge");
+  return t("interface.kindUnknown");
 }
 
 function RunPage({
@@ -707,20 +1018,29 @@ function RemediationPage({ onRetest }: { onRetest: () => void }) {
   </section>;
 }
 
-function NetworkReliabilityPage({ onRunningChange }: { onRunningChange: (running: boolean) => void }) {
+function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChange: (running: boolean) => void; onComplete: (result: NetworkReliabilityRun) => void }) {
   const { t } = useI18n();
-  const [projectName, setProjectName] = useState("");
-  const [checks, setChecks] = useState([false, false, false, false]);
+  const [confirmed, setConfirmed] = useState(false);
+  const [mode, setMode] = useState<DoctorMode>("quick");
+  const [interfaces, setInterfaces] = useState<AuditInterface[]>([]);
+  const [selectedInterface, setSelectedInterface] = useState("");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<NetworkReliabilityRun | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const allChecked = checks.every(Boolean);
-  const canRun = allChecked && projectName.trim().length > 0 && !running;
+  const canRun = confirmed && !running;
 
-  const toggleCheck = (index: number, checked: boolean) => {
-    setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? checked : value));
-  };
+  useEffect(() => {
+    invoke<AuditInterface[]>("list_audit_interfaces")
+      .then((items) => {
+        setInterfaces(items);
+        if (!selectedInterface) {
+          const preferred = pickPreferredAuditInterface(items);
+          if (preferred) setSelectedInterface(preferred.name);
+        }
+      })
+      .catch(() => setInterfaces([]));
+  }, [selectedInterface]);
 
   const runCheck = async () => {
     setRunning(true);
@@ -728,11 +1048,13 @@ function NetworkReliabilityPage({ onRunningChange }: { onRunningChange: (running
     setError("");
     setMessage("");
     try {
-      await invoke("authorize_audit", { projectName: projectName.trim() });
-      const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check");
-      setResult(next);
-      setMessage(`${t("reliability.savedTo")}: ${next.outputDirectory}`);
-      setChecks([false, false, false, false]);
+      await invoke("authorize_audit", { projectName: mode === "quick" ? "Network Doctor Quick Check" : "Network Doctor Deep Diagnosis" });
+      const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check", { mode });
+      const completed = { ...next, doctorMode: mode };
+      setResult(completed);
+      onComplete(completed);
+      setMessage(`${t("reliability.savedTo")}: ${completed.outputDirectory}`);
+      setConfirmed(false);
     } catch (value) {
       setError(errorMessage(value));
     } finally {
@@ -754,39 +1076,44 @@ function NetworkReliabilityPage({ onRunningChange }: { onRunningChange: (running
   return (
     <section className="content-stack reliability-page">
       <PageHeading eyebrow={t("reliability.eyebrow")} title={t("reliability.title")} description={t("reliability.description")} />
-      <p className="limitation">{t("pointInTime")}</p>
-      <div className="form-grid">
-        <label>{t("reliability.projectName")} <strong>*</strong><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
-      </div>
-      <div className="confirmation-list">
-        {[
-          t("reliability.confirmScope"),
-          t("reliability.confirmReadOnly"),
-          t("reliability.confirmNoChanges"),
-          t("reliability.confirmLocalFiles"),
-        ].map((label, index) => (
-          <label className="confirmation card compact" key={label}>
-            <input type="checkbox" checked={checks[index]} onChange={(event) => toggleCheck(index, event.target.checked)} />
-            <span><strong>{label}</strong></span>
-          </label>
-        ))}
-      </div>
-      <div className="actions">
-        <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : t("reliability.run")}</button>
-      </div>
+      <section className="card compact lightweight-confirmation">
+        <div>
+          <h2>{t("reliability.lightConfirmTitle")}</h2>
+          <p>{t("reliability.lightConfirmDescription")}</p>
+        </div>
+        <div className="doctor-mode-selector" aria-label={t("reliability.mode")}>
+          <button className={mode === "quick" ? "mode-option active" : "mode-option"} type="button" disabled={running} onClick={() => setMode("quick")}>
+            <strong>{t("reliability.quickCheck")}</strong>
+            <span>{t("reliability.quickCheckHint")}</span>
+          </button>
+          <button className={mode === "deep" ? "mode-option active" : "mode-option"} type="button" disabled={running} onClick={() => setMode("deep")}>
+            <strong>{t("reliability.deepDiagnosis")}</strong>
+            <span>{t("reliability.deepDiagnosisHint")}</span>
+          </button>
+        </div>
+        <label className="confirmation">
+          <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+          <span><strong>{t("reliability.lightConfirmCheck")}</strong></span>
+        </label>
+        <div className="actions">
+          <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : mode === "quick" ? t("button.startNetworkCheck") : t("reliability.deepDiagnosis")}</button>
+        </div>
+      </section>
+      <NetworkInterfaceSelector interfaces={interfaces} selected={selectedInterface} onSelect={setSelectedInterface} mode="reliability" />
+      <p className="limitation">{t("reliability.pointInTime")}</p>
       {message && <p className="message success-message">{message}</p>}
       {error && <RawDetail detail={error} />}
-      {!result && !error && <p className="message">{t("reliability.noResult")}</p>}
+      {!result && !error && <NetworkReliabilityResult result={demoNetworkReliabilityRun} onOpenArtifact={openArtifact} demo />}
       {result && <NetworkReliabilityResult result={result} onOpenArtifact={openArtifact} />}
     </section>
   );
 }
 
-function NetworkReliabilityResult({ result, onOpenArtifact }: { result: NetworkReliabilityRun; onOpenArtifact: (kind: string) => Promise<void> }) {
-  const { t } = useI18n();
+function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { result: NetworkReliabilityRun; onOpenArtifact: (kind: string) => Promise<void>; demo?: boolean }) {
+  const { locale, t } = useI18n();
   const summary = result.summary;
   const evidence = result.evidence;
-  const pathSegments = summary.currentPath.split(/\s+->\s+/).filter(Boolean);
+  const doctor = diagnoseNetworkDoctor(evidence, result.doctorMode ?? "quick");
   const overlayComponents = [
     evidence.overlay.stashDetected ? "Stash" : "",
     evidence.overlay.tailscaleRunning ? "Tailscale" : "",
@@ -798,33 +1125,59 @@ function NetworkReliabilityResult({ result, onOpenArtifact }: { result: NetworkR
 
   return (
     <div className="content-stack">
+      {demo && <p className="message demo-message">{t("overview.demoNotice")}</p>}
+      <section className="card compact doctor-hero">
+        <div>
+          <div className="panel-heading">
+            <span className="eyebrow">{t("reliability.eyebrow")}</span>
+            <StatusBadge status={doctor.overallStatus} label={formatScoreState(doctor.overallState, locale)} />
+          </div>
+          <h2>{t("reliability.currentPath")}</h2>
+          <p>{doctor.currentNetworkPath}</p>
+        </div>
+        <div className="doctor-score">
+          <span>{t("reliability.score")}</span>
+          <strong>{doctor.overallScore}</strong>
+          <small>{formatScoreState(doctor.overallState, locale)}</small>
+        </div>
+      </section>
+      <div className="doctor-overview-grid">
+        <section className="card compact">
+          <h2>{t("reliability.primaryFaultDomain")}</h2>
+          <p className="doctor-domain">{formatDomainLabel(doctor.primaryFaultDomain, locale)}</p>
+          <p className="muted">{doctor.osiLayerMapping.map((item) => item.layers.join(" / ")).join(" · ") || t("status.unknown")}</p>
+        </section>
+        <section className="card compact">
+          <h2>{t("reliability.contributingDomains")}</h2>
+          <p className="doctor-domain">{doctor.contributingDomains.map((domain) => formatDomainLabel(domain, locale)).join(" · ") || t("status.unknown")}</p>
+          <p className="muted">{t("reliability.osiMapping")}</p>
+        </section>
+      </div>
+      <DoctorScorecards scorecards={doctor.scorecards} />
+      <RootCauseCandidates candidates={doctor.rootCauseCandidates.slice(0, 3)} />
+      <DoctorActionPanel candidate={doctor.rootCauseCandidates[0]} />
       <div className="summary-grid reliability-summary">
         <ReliabilitySummaryCard label={t("reliability.overallStatus")} status={summary.overallStatus} />
         <ReliabilitySummaryCard label={t("reliability.physicalLan")} status={summary.physicalLanStatus} />
         <ReliabilitySummaryCard label={t("reliability.dns")} status={summary.dnsStatus} />
+        <ReliabilitySummaryCard label={t("reliability.overlay")} status={summary.overlayStatus} />
         <ReliabilitySummaryCard label={t("reliability.externalInternet")} status={summary.externalPathStatus} />
       </div>
       <section className="card compact reliability-path">
         <h2>{t("reliability.networkPathView")}</h2>
-        <div className="path-segments">
-          {pathSegments.map((segment, index) => (
-            <span className="path-segment" key={`${segment}-${index}`}>{segment}</span>
-          ))}
-        </div>
+        <NetworkPathMap summary={summary} evidence={evidence} />
       </section>
+      <LatencyVisualization evidence={evidence} />
       <div className="reliability-grid">
-        <section className="card compact">
-          <h2>{t("reliability.summary")}</h2>
-          <dl className="report-metadata single-column">
-            <div><dt>{t("reliability.profile")}</dt><dd>{evidence.profile || t("status.unknown")}</dd></div>
-            <div><dt>{t("reliability.faultPoint")}</dt><dd>{summary.faultPoint}</dd></div>
-            <div><dt>{t("reliability.impact")}</dt><dd>{summary.impact}</dd></div>
-            <div><dt>{t("reliability.currentPath")}</dt><dd>{summary.currentPath}</dd></div>
-          </dl>
+        <section className="card compact diagnosis-panel">
+          <h2>{t("reliability.faultPoint")}</h2>
+          <p>{localizeReliabilityText(summary.faultPoint, locale)}</p>
+          <p className="muted">{localizeReliabilityText(summary.impact, locale)}</p>
         </section>
         <section className="card compact">
           <h2>{t("reliability.evidencePanel")}</h2>
           <dl className="report-metadata single-column">
+            <div><dt>{t("reliability.profile")}</dt><dd>{evidence.profile || t("status.unknown")}</dd></div>
             <div><dt>{t("reliability.interface")}</dt><dd>{evidence.physicalLan.activeInterface}</dd></div>
             <div><dt>{t("reliability.gateway")}</dt><dd>{evidence.physicalLan.gatewayIp ?? t("status.unknown")}</dd></div>
             <div><dt>{t("reliability.gatewayLoss")}</dt><dd>{formatNullablePercent(evidence.physicalLan.gatewayPingLossPct, t("status.unknown"))}</dd></div>
@@ -835,13 +1188,29 @@ function NetworkReliabilityResult({ result, onOpenArtifact }: { result: NetworkR
           </dl>
         </section>
       </div>
-      <div className="reliability-grid">
-        <NetworkListCard title={t("reliability.keyEvidence")} items={summary.evidence} />
-        <NetworkListCard title={t("reliability.advicePanel")} items={summary.remediationAdvice} />
+      <div className="network-check-sections">
+        <DiagnosticSection title={t("networkCheck.physicalLan")} status={summary.physicalLanStatus} metrics={[
+          [t("reliability.interface"), evidence.physicalLan.activeInterface],
+          [t("overview.localIp"), evidence.physicalLan.ipv4 ?? t("status.unknown")],
+          [t("reliability.gateway"), evidence.physicalLan.gatewayIp ?? t("status.unknown")],
+          [t("reliability.gatewayLatency"), formatNullableMs(evidence.physicalLan.gatewayPingAvgMs, t("status.unknown"))],
+        ]} judgement={summary.physicalLanStatus === "healthy" ? t("networkCheck.physicalHealthy") : localizeReliabilityText(summary.faultPoint, locale)} evidence={summary.evidence} advice={summary.remediationAdvice} />
+        <DiagnosticSection title={t("networkCheck.dns")} status={summary.dnsStatus} metrics={[
+          [t("overview.dhcpDns"), (evidence.physicalLan.dhcpDns ?? []).join(", ") || t("status.unknown")],
+          [t("reliability.systemDns"), evidence.localControlPlane.systemDnsServers.join(", ") || t("status.unknown")],
+          [t("overview.gatewayDns"), formatNullableMs(evidence.physicalLan.gatewayDnsMs, t("status.unknown"))],
+        ]} judgement={evidence.overlay.dnsViaOverlay ? t("overview.dnsTakenByOverlay") : t("overview.dnsDirect")} evidence={summary.evidence} advice={summary.remediationAdvice} />
+        <DiagnosticSection title={t("networkCheck.overlay")} status={summary.overlayStatus} metrics={[
+          [t("reliability.defaultRoute"), evidence.overlay.defaultRouteInterface ?? t("status.unknown")],
+          ["Stash", evidence.overlay.stashDetected ? t("status.active") : t("status.stopped")],
+          ["Tailscale", evidence.overlay.tailscaleRunning ? t("status.active") : t("status.stopped")],
+          ["utun", evidence.overlay.utunInterfaces.join(", ") || t("status.notDetected")],
+        ]} judgement={overlayComponents} evidence={summary.evidence} advice={summary.remediationAdvice} />
+        <DiagnosticSection title={t("networkCheck.external")} status={summary.externalPathStatus} metrics={evidence.external.targets.map((target) => [target.url, formatNullableMs(target.totalMs, t("status.unknown"))])} judgement={summary.externalPathStatus === "healthy" ? t("networkCheck.externalHealthy") : localizeReliabilityText(summary.faultPoint, locale)} evidence={summary.evidence} advice={summary.remediationAdvice} />
       </div>
       <div className="reliability-grid">
+        <NetworkListCard title={t("reliability.advicePanel")} items={summary.remediationAdvice} />
         <NetworkListCard title={t("reliability.retest")} items={summary.retestPlan} ordered />
-        <NetworkListCard title={t("reliability.externalTargets")} items={evidence.external.targets.map((target) => `${target.url}: ${formatNullableMs(target.totalMs, t("status.unknown"))}`)} />
       </div>
       <section className="card compact export-card">
         <div>
@@ -849,10 +1218,10 @@ function NetworkReliabilityResult({ result, onOpenArtifact }: { result: NetworkR
           <p className="path">{result.supportBundlePath}</p>
         </div>
         <div className="actions">
-          <button className="secondary" type="button" onClick={() => onOpenArtifact("report")}>{t("reliability.exportMarkdown")}</button>
-          <button className="secondary" type="button" onClick={() => onOpenArtifact("summary")}>{t("reliability.exportJson")}</button>
-          <button className="secondary" type="button" onClick={() => onOpenArtifact("bundle")}>{t("reliability.exportZip")}</button>
-          <button className="secondary" type="button" onClick={() => onOpenArtifact("folder")}>{t("reliability.openOutput")}</button>
+          <button className="secondary" type="button" disabled={demo} onClick={() => onOpenArtifact("report")}>{t("reliability.exportMarkdown")}</button>
+          <button className="secondary" type="button" disabled={demo} onClick={() => onOpenArtifact("summary")}>{t("reliability.exportJson")}</button>
+          <button className="secondary" type="button" disabled={demo} onClick={() => onOpenArtifact("bundle")}>{t("button.exportSupportBundle")}</button>
+          <button className="secondary" type="button" disabled={demo} onClick={() => onOpenArtifact("folder")}>{t("reliability.openOutput")}</button>
         </div>
       </section>
       <details className="card compact report-section">
@@ -864,23 +1233,290 @@ function NetworkReliabilityResult({ result, onOpenArtifact }: { result: NetworkR
   );
 }
 
+function DoctorScorecards({ scorecards }: { scorecards: DoctorScorecard[] }) {
+  const { locale, t } = useI18n();
+  return (
+    <section className="card compact doctor-scorecards">
+      <div className="panel-heading">
+        <h2>{t("reliability.score")}</h2>
+      </div>
+      <div className="doctor-scorecard-grid">
+        {scorecards.map((card) => (
+          <div className={`doctor-scorecard ${card.status}`} key={card.name}>
+            <span>{formatScorecardName(card.name, locale)}</span>
+            <strong>{card.score}</strong>
+            <small>{formatScoreState(card.state, locale)}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RootCauseCandidates({ candidates }: { candidates: RootCauseCandidate[] }) {
+  const { locale, t } = useI18n();
+  return (
+    <section className="card compact root-cause-panel">
+      <h2>{t("reliability.rootCauseTop3")}</h2>
+      <div className="root-cause-list">
+        {candidates.map((candidate) => (
+          <article className="root-cause-item" key={`${candidate.rank}-${candidate.faultDomain}`}>
+            <div>
+              <strong>{candidate.rank}. {localizeDoctorTitle(candidate.title, locale)}</strong>
+              <span>{formatDomainLabel(candidate.faultDomain, locale)}</span>
+            </div>
+            <dl>
+              <div><dt>{t("reliability.probability")}</dt><dd>{candidate.probability}%</dd></div>
+              <div><dt>{t("reliability.confidence")}</dt><dd>{formatConfidence(candidate.confidence, locale)}</dd></div>
+            </dl>
+            <details>
+              <summary>{t("reliability.evidenceFor")}</summary>
+              <ul>{candidate.evidenceFor.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
+            </details>
+            <details>
+              <summary>{t("reliability.evidenceAgainst")}</summary>
+              <ul>{candidate.evidenceAgainst.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
+            </details>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DoctorActionPanel({ candidate }: { candidate: RootCauseCandidate | undefined }) {
+  const { locale, t } = useI18n();
+  if (!candidate) return null;
+  return (
+    <section className="card compact doctor-action-panel">
+      <div className="panel-heading">
+        <h2>{t("reliability.recommendedActions")}</h2>
+        <StatusBadge status={candidate.confidence === "High" ? "warning" : "unknown"} label={formatConfidence(candidate.confidence, locale)} />
+      </div>
+      <div className="doctor-action-grid">
+        {candidate.remediationAdvice.slice(0, 2).map((advice) => (
+          <article className="doctor-action" key={advice.action}>
+            <h3>{localizeReliabilityText(advice.action, locale)}</h3>
+            <dl>
+              <div><dt>{t("reliability.reason")}</dt><dd>{localizeReliabilityText(advice.reason, locale)}</dd></div>
+              <div><dt>{t("reliability.risk")}</dt><dd>{localizeReliabilityText(advice.risk, locale)}</dd></div>
+              <div><dt>{t("reliability.expectedResult")}</dt><dd>{localizeReliabilityText(advice.expectedResult, locale)}</dd></div>
+              <div><dt>{t("reliability.verification")}</dt><dd>{localizeReliabilityText(advice.verification, locale)}</dd></div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DiagnosticSection({
+  title,
+  status,
+  metrics,
+  judgement,
+  evidence,
+  advice,
+}: {
+  title: string;
+  status: ReliabilityStatus;
+  metrics: [string, string][];
+  judgement: string;
+  evidence: string[];
+  advice: string[];
+}) {
+  const { locale, t } = useI18n();
+  return (
+    <section className="card compact diagnostic-section">
+      <div className="panel-heading">
+        <h2>{title}</h2>
+        <StatusBadge status={status} label={t(`reliability.status.${status}`)} />
+      </div>
+      <dl className="metric-list">
+        {metrics.map(([label, value]) => <div key={`${title}-${label}`}><dt>{label}</dt><dd>{value}</dd></div>)}
+      </dl>
+      <div className="judgement"><strong>{t("networkCheck.judgement")}</strong><span>{judgement}</span></div>
+      <details>
+        <summary>{t("networkCheck.evidence")}</summary>
+        <ul>{evidence.slice(0, 3).map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
+      </details>
+      <details>
+        <summary>{t("networkCheck.advice")}</summary>
+        <ul>{advice.slice(0, 4).map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
+      </details>
+    </section>
+  );
+}
+
 function ReliabilitySummaryCard({ label, status }: { label: string; status: ReliabilityStatus }) {
   const { t } = useI18n();
   return <div className={`summary-card card reliability-status ${status}`}><span>{label}</span><strong>{t(`reliability.status.${status}`)}</strong></div>;
 }
 
 function NetworkListCard({ title, items, ordered = false }: { title: string; items: string[]; ordered?: boolean }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const Tag = ordered ? "ol" : "ul";
-  return <section className="card compact reliability-list"><h2>{title}</h2>{items.length === 0 ? <p className="muted">{t("status.unknown")}</p> : <Tag>{items.map((item) => <li key={item}>{item}</li>)}</Tag>}</section>;
+  return <section className="card compact reliability-list"><h2>{title}</h2>{items.length === 0 ? <p className="muted">{t("status.unknown")}</p> : <Tag>{items.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</Tag>}</section>;
 }
 
 function formatNullableMs(value: number | null | undefined, unknown: string): string {
-  return typeof value === "number" ? `${value} ms` : unknown;
+  return typeof value === "number" ? `${formatNumber(value)} ms` : unknown;
 }
 
 function formatNullablePercent(value: number | null | undefined, unknown: string): string {
-  return typeof value === "number" ? `${value}%` : unknown;
+  return typeof value === "number" ? `${formatNumber(value)}%` : unknown;
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function localizeReliabilityText(value: string, locale: Locale): string {
+  const zhCN: Record<string, string> = {
+    "Physical LAN is healthy; internet path is currently handled by Stash TUN.": "物理网络正常，当前上网路径由 Stash TUN 接管。",
+    "No physical LAN fault is indicated; traffic is intentionally using an overlay path.": "当前没有物理网络故障迹象，流量正在按预期使用 Overlay 路径。",
+    "Physical LAN has DHCP, router, and stable gateway reachability.": "物理网络具备 DHCP、路由器和稳定网关可达性。",
+    "Default route uses an overlay interface and Stash indicators are present.": "默认路由使用 Overlay 接口，并检测到 Stash 相关迹象。",
+    "If external access is slow, check Stash node, rule routing, DNS policy, and proxy exit.": "如果外网访问慢，优先检查 Stash 节点、规则分流、DNS 策略和代理出口。",
+    "Compare direct gateway DNS with system DNS before blaming the router.": "在判断路由器故障前，先对比网关直连 DNS 与系统 DNS。",
+    "Retest once with the overlay disabled outside LANPilot, then retest with Stash enabled.": "先在 LANPilot 外关闭 Overlay 复测，再启用 Stash 后复测。",
+    "Tailscale Exit Node may be affecting external connectivity.": "Tailscale Exit Node 可能正在影响外部连通性。",
+    "External traffic may be routed through a remote exit path instead of the local ISP path.": "外部流量可能通过远端出口路径，而不是本地运营商路径。",
+    "Default route uses an overlay interface while Tailscale is running as an exit path.": "默认路由使用 Overlay 接口，同时 Tailscale 正作为出口路径运行。",
+    "DNS uses Tailscale DNS and HTTPS timing is slow or failed.": "DNS 使用 Tailscale DNS，且 HTTPS 时序较慢或失败。",
+    "Disable Exit Node outside LANPilot and retest.": "在 LANPilot 外关闭 Exit Node 后复测。",
+    "Disable Tailscale DNS if it is not needed for this workflow.": "如果当前流程不需要 Tailscale DNS，请关闭后复测。",
+    "Compare external HTTPS timing before and after the Exit Node change.": "对比调整 Exit Node 前后的外部 HTTPS 时序。",
+    "Local gateway or physical link instability detected.": "检测到本地网关或物理链路不稳定。",
+    "Local network instability can affect DNS, browsing, and app connectivity before traffic reaches the internet.": "在流量到达互联网前，本地网络不稳定就可能影响 DNS、浏览器和应用连接。",
+    "Check Ethernet cable, switch port, router load, and USB Ethernet adapter.": "检查网线、交换机端口、路由器负载和 USB 网卡。",
+    "Retest with the current physical path isolated from overlay and proxy changes.": "在保持 Overlay 和代理状态不变的前提下，单独复测当前物理路径。",
+    "Run gateway ping and gateway DNS timing again after the physical path is checked.": "检查物理路径后，再次复测网关 ping 和网关 DNS 时序。",
+  };
+  const zhTW: Record<string, string> = Object.fromEntries(Object.entries(zhCN).map(([key, text]) => [
+    key,
+    [
+      ["网络", "網路"], ["当前", "目前"], ["路径", "路徑"], ["网关", "閘道"],
+      ["检测", "檢測"], ["默认", "預設"], ["关闭", "關閉"], ["后", "後"],
+      ["复测", "複測"], ["运营商", "營運商"],
+    ].reduce((current, [from, to]) => current.split(from).join(to), text),
+  ]));
+  if (locale === "zh-CN") return zhCN[value] ?? value;
+  if (locale === "zh-TW") return zhTW[value] ?? value;
+  return value;
+}
+
+function formatDomainLabel(domain: DiagnosticDomain, locale: Locale): string {
+  const labels: Record<Locale, Partial<Record<DiagnosticDomain, string>>> = {
+    en: {
+      local_host: "Local host", physical_interface: "Physical interface", wifi_radio: "Wi-Fi radio", ethernet_link: "Ethernet link", dhcp: "DHCP", gateway: "Gateway", local_dns: "Local DNS", system_dns: "System DNS", route: "Route", overlay_proxy: "Overlay / Proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "External path", application_endpoint: "Application endpoint", router_health: "Router health", unknown: "Unknown",
+    },
+    "zh-CN": {
+      local_host: "本机", physical_interface: "物理接口", wifi_radio: "Wi-Fi 射频", ethernet_link: "以太网链路", dhcp: "DHCP", gateway: "网关", local_dns: "本地 DNS", system_dns: "系统 DNS", route: "路由", overlay_proxy: "Overlay / 代理", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部路径", application_endpoint: "应用端点", router_health: "路由器健康", unknown: "未知",
+    },
+    "zh-TW": {
+      local_host: "本機", physical_interface: "實體介面", wifi_radio: "Wi-Fi 射頻", ethernet_link: "乙太網路鏈路", dhcp: "DHCP", gateway: "閘道", local_dns: "本機 DNS", system_dns: "系統 DNS", route: "路由", overlay_proxy: "Overlay / 代理", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部路徑", application_endpoint: "應用端點", router_health: "路由器健康", unknown: "未知",
+    },
+    ja: {
+      local_host: "ローカルホスト", physical_interface: "物理インターフェース", wifi_radio: "Wi-Fi 無線", ethernet_link: "Ethernet リンク", dhcp: "DHCP", gateway: "ゲートウェイ", local_dns: "ローカル DNS", system_dns: "システム DNS", route: "ルート", overlay_proxy: "Overlay / プロキシ", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部経路", application_endpoint: "アプリ端点", router_health: "ルーター状態", unknown: "不明",
+    },
+    ko: {
+      local_host: "로컬 호스트", physical_interface: "물리 인터페이스", wifi_radio: "Wi-Fi 무선", ethernet_link: "이더넷 링크", dhcp: "DHCP", gateway: "게이트웨이", local_dns: "로컬 DNS", system_dns: "시스템 DNS", route: "경로", overlay_proxy: "Overlay / 프록시", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "외부 경로", application_endpoint: "애플리케이션 엔드포인트", router_health: "라우터 상태", unknown: "알 수 없음",
+    },
+    de: {
+      local_host: "Lokaler Host", physical_interface: "Physische Schnittstelle", wifi_radio: "WLAN-Funk", ethernet_link: "Ethernet-Link", dhcp: "DHCP", gateway: "Gateway", local_dns: "Lokales DNS", system_dns: "System-DNS", route: "Route", overlay_proxy: "Overlay / Proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Externer Pfad", application_endpoint: "App-Endpunkt", router_health: "Routerzustand", unknown: "Unbekannt",
+    },
+    fr: {
+      local_host: "Hôte local", physical_interface: "Interface physique", wifi_radio: "Radio Wi-Fi", ethernet_link: "Lien Ethernet", dhcp: "DHCP", gateway: "Passerelle", local_dns: "DNS local", system_dns: "DNS système", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Chemin externe", application_endpoint: "Point applicatif", router_health: "Santé routeur", unknown: "Inconnu",
+    },
+    es: {
+      local_host: "Host local", physical_interface: "Interfaz física", wifi_radio: "Radio Wi-Fi", ethernet_link: "Enlace Ethernet", dhcp: "DHCP", gateway: "Puerta de enlace", local_dns: "DNS local", system_dns: "DNS del sistema", route: "Ruta", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Ruta externa", application_endpoint: "Endpoint de aplicación", router_health: "Salud del router", unknown: "Desconocido",
+    },
+    "pt-BR": {
+      local_host: "Host local", physical_interface: "Interface física", wifi_radio: "Rádio Wi-Fi", ethernet_link: "Link Ethernet", dhcp: "DHCP", gateway: "Gateway", local_dns: "DNS local", system_dns: "DNS do sistema", route: "Rota", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Caminho externo", application_endpoint: "Endpoint da aplicação", router_health: "Saúde do roteador", unknown: "Desconhecido",
+    },
+    it: {
+      local_host: "Host locale", physical_interface: "Interfaccia fisica", wifi_radio: "Radio Wi-Fi", ethernet_link: "Link Ethernet", dhcp: "DHCP", gateway: "Gateway", local_dns: "DNS locale", system_dns: "DNS di sistema", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Percorso esterno", application_endpoint: "Endpoint applicativo", router_health: "Salute router", unknown: "Sconosciuto",
+    },
+    nl: {
+      local_host: "Lokale host", physical_interface: "Fysieke interface", wifi_radio: "Wi-Fi-radio", ethernet_link: "Ethernetlink", dhcp: "DHCP", gateway: "Gateway", local_dns: "Lokaal DNS", system_dns: "Systeem-DNS", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Extern pad", application_endpoint: "Applicatie-eindpunt", router_health: "Routergezondheid", unknown: "Onbekend",
+    },
+  };
+  return labels[locale][domain] ?? labels.en[domain] ?? domain;
+}
+
+function formatScoreState(state: DoctorScoreState, locale: Locale): string {
+  const values: Record<Locale, Record<DoctorScoreState, string>> = {
+    en: { Excellent: "Excellent", Healthy: "Healthy", Degraded: "Degraded", Poor: "Poor", Critical: "Critical" },
+    "zh-CN": { Excellent: "优秀", Healthy: "健康", Degraded: "降级", Poor: "较差", Critical: "严重" },
+    "zh-TW": { Excellent: "優秀", Healthy: "健康", Degraded: "降級", Poor: "較差", Critical: "嚴重" },
+    ja: { Excellent: "優秀", Healthy: "正常", Degraded: "低下", Poor: "不良", Critical: "重大" },
+    ko: { Excellent: "매우 좋음", Healthy: "정상", Degraded: "저하", Poor: "나쁨", Critical: "심각" },
+    de: { Excellent: "Exzellent", Healthy: "Gesund", Degraded: "Beeinträchtigt", Poor: "Schwach", Critical: "Kritisch" },
+    fr: { Excellent: "Excellent", Healthy: "Sain", Degraded: "Dégradé", Poor: "Médiocre", Critical: "Critique" },
+    es: { Excellent: "Excelente", Healthy: "Saludable", Degraded: "Degradado", Poor: "Deficiente", Critical: "Crítico" },
+    "pt-BR": { Excellent: "Excelente", Healthy: "Saudável", Degraded: "Degradado", Poor: "Ruim", Critical: "Crítico" },
+    it: { Excellent: "Eccellente", Healthy: "Sano", Degraded: "Degradato", Poor: "Scarso", Critical: "Critico" },
+    nl: { Excellent: "Uitstekend", Healthy: "Gezond", Degraded: "Verminderd", Poor: "Zwak", Critical: "Kritiek" },
+  };
+  return values[locale][state];
+}
+
+function formatConfidence(value: RootCauseCandidate["confidence"], locale: Locale): string {
+  const values: Record<Locale, Record<RootCauseCandidate["confidence"], string>> = {
+    en: { High: "High", Medium: "Medium", Low: "Low" },
+    "zh-CN": { High: "高", Medium: "中", Low: "低" },
+    "zh-TW": { High: "高", Medium: "中", Low: "低" },
+    ja: { High: "高", Medium: "中", Low: "低" },
+    ko: { High: "높음", Medium: "중간", Low: "낮음" },
+    de: { High: "Hoch", Medium: "Mittel", Low: "Niedrig" },
+    fr: { High: "Élevée", Medium: "Moyenne", Low: "Faible" },
+    es: { High: "Alta", Medium: "Media", Low: "Baja" },
+    "pt-BR": { High: "Alta", Medium: "Média", Low: "Baixa" },
+    it: { High: "Alta", Medium: "Media", Low: "Bassa" },
+    nl: { High: "Hoog", Medium: "Middel", Low: "Laag" },
+  };
+  return values[locale][value];
+}
+
+function formatScorecardName(name: DoctorScorecard["name"], locale: Locale): string {
+  const zhCN: Record<DoctorScorecard["name"], string> = {
+    "Physical LAN": "物理网络",
+    "Wi-Fi": "Wi-Fi",
+    "Gateway": "网关",
+    "DNS": "DNS",
+    "Overlay / Proxy": "Overlay / 代理",
+    "External Path": "外部路径",
+    "Application Access": "应用访问",
+  };
+  const zhTW: Record<DoctorScorecard["name"], string> = { ...zhCN, "Physical LAN": "實體網路", "Gateway": "閘道", "External Path": "外部路徑", "Application Access": "應用存取" };
+  const ja: Record<DoctorScorecard["name"], string> = { "Physical LAN": "物理 LAN", "Wi-Fi": "Wi-Fi", Gateway: "ゲートウェイ", DNS: "DNS", "Overlay / Proxy": "Overlay / プロキシ", "External Path": "外部経路", "Application Access": "アプリ接続" };
+  const ko: Record<DoctorScorecard["name"], string> = { "Physical LAN": "물리 LAN", "Wi-Fi": "Wi-Fi", Gateway: "게이트웨이", DNS: "DNS", "Overlay / Proxy": "Overlay / 프록시", "External Path": "외부 경로", "Application Access": "앱 접근" };
+  if (locale === "zh-CN") return zhCN[name];
+  if (locale === "zh-TW") return zhTW[name];
+  if (locale === "ja") return ja[name];
+  if (locale === "ko") return ko[name];
+  return name;
+}
+
+function localizeDoctorTitle(value: string, locale: Locale): string {
+  const zhCN: Record<string, string> = {
+    "No single root cause has enough evidence yet": "当前证据不足以支持单一根因",
+    "Overlay or proxy path is the likely inspection point": "Overlay 或代理路径是优先检查点",
+    "Tailscale exit path or DNS policy may be affecting access": "Tailscale 出口路径或 DNS 策略可能影响访问",
+    "Local gateway or first-hop path instability": "本地网关或第一跳路径不稳定",
+    "DHCP or local address assignment is incomplete": "DHCP 或本地地址分配不完整",
+    "Wi-Fi radio quality or channel conditions may be degrading the path": "Wi-Fi 射频质量或信道条件可能导致路径降级",
+    "TCP connection state explains the application failure": "TCP 连接状态可解释应用失败",
+    "TLS handshake or certificate validation is failing": "TLS 握手或证书验证失败",
+    "Application endpoint is slow or returning errors": "应用端点较慢或返回错误",
+    "Router resource pressure may affect forwarding": "路由器资源压力可能影响转发",
+  };
+  if (locale === "zh-CN") return zhCN[value] ?? value;
+  if (locale === "zh-TW") return [
+    ["路径", "路徑"], ["网关", "閘道"], ["证据", "證據"], ["应用", "應用"],
+  ].reduce((current, [from, to]) => current.split(from).join(to), zhCN[value] ?? value);
+  return value;
 }
 
 function ExportPage() {

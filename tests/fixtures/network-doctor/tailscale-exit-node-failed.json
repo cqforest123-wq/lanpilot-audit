@@ -1,0 +1,15 @@
+{
+  "profile": "Tailscale Exit Node failed",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "tailscale",
+  "observations": {
+    "route": { "defaultInterface": "utun8", "physicalInterface": "en0", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": true },
+    "overlays": [
+      { "interface": "utun8", "ownerType": "tailscale", "ownerName": "Tailscale", "confidence": 0.92, "evidence": ["100.100.100.100 resolver observed", "Exit Node controls default route", "External HTTPS fails through the exit path"], "controlsDefaultRoute": true, "controlsDns": true, "healthy": false }
+    ],
+    "applications": [
+      { "group": "GitHub", "url": "https://github.com", "state": "timeout", "dnsMs": 900, "tcpMs": null, "tlsMs": null, "ttfbMs": null, "totalMs": null, "status": null, "remoteIp": null }
+    ]
+  }
+}

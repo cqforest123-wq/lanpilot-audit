@@ -1,0 +1,13 @@
+{
+  "profile": "DHCP self-assigned",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "dhcp",
+  "observations": {
+    "physicalInterface": { "name": "en0", "kind": "wifi", "ipv4": "169.254.22.10", "selfAssigned": true },
+    "wifi": { "active": true, "ssid": "Demo Wi-Fi", "rssiDbm": -50, "snrDb": 38, "channel": 36, "band": "5GHz", "channelWidthMhz": 80 },
+    "dhcp": { "ok": false, "server": null, "router": null, "dnsServers": [] },
+    "gateway": { "ip": null, "sampleCount": 0, "avgMs": null, "jitterMs": null, "lossPct": null },
+    "route": { "defaultInterface": null, "physicalInterface": "en0", "physicalGateway": null, "defaultUsesOverlay": false }
+  }
+}

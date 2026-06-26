@@ -8,9 +8,13 @@ Do not commit screenshots from real customer, family, office, or production netw
 
 These README preview screenshots are committed:
 
-1. `screenshot-authorization.png` - authorization workflow and safety boundary.
-2. `screenshot-report-zh.png` - Chinese report page with demo risk register and Raw Evidence entry.
-3. `screenshot-remediation.png` - remediation tickets and service exposure matrix.
+1. `dashboard-overview.png` - v1.6.1 modern dashboard with synthetic Stash TUN path.
+2. `network-path-map.png` - path map with physical LAN, local gateway, overlay, proxy exit, and internet.
+3. `latency-diagnostics.png` - gateway, DNS, and HTTPS timing bars with demo measurements.
+4. `troubleshooting-advice-zh.png` - Chinese fault point and troubleshooting advice using demo data.
+5. `screenshot-authorization.png` - authorization workflow and safety boundary.
+6. `screenshot-report-zh.png` - Chinese report page with demo risk register and Raw Evidence entry.
+7. `screenshot-remediation.png` - remediation tickets and service exposure matrix.
 
 ## Additional Assets
 
@@ -31,6 +35,10 @@ npm run public:check
 
 The generator writes temporary HTML outside the repository and updates only:
 
+- `docs/assets/dashboard-overview.png`
+- `docs/assets/network-path-map.png`
+- `docs/assets/latency-diagnostics.png`
+- `docs/assets/troubleshooting-advice-zh.png`
 - `docs/assets/screenshot-authorization.png`
 - `docs/assets/screenshot-report-zh.png`
 - `docs/assets/screenshot-remediation.png`

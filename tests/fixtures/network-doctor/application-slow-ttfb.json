@@ -1,0 +1,11 @@
+{
+  "profile": "Application slow TTFB",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "application_endpoint",
+  "observations": {
+    "applications": [
+      { "group": "GitHub", "url": "https://github.com", "state": "reachable", "dnsMs": 22, "tcpMs": 110, "tlsMs": 180, "ttfbMs": 3600, "totalMs": 5200, "status": 200, "remoteIp": "203.0.113.10" }
+    ]
+  }
+}
