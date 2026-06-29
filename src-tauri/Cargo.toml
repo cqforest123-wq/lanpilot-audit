@@ -1,6 +1,6 @@
 [package]
 name = "lanpilot-audit-app"
-version = "1.7.1"
+version = "1.7.2"
 description = "Authorized LAN governance and exposure assessment for small business networks."
 authors = ["LANPilot"]
 edition = "2021"
