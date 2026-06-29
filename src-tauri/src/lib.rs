@@ -1762,6 +1762,40 @@ fn target_group(url: &str) -> &'static str {
     }
 }
 
+fn is_iphone_hotspot_ipv4(value: Option<&str>) -> bool {
+    value
+        .map(|address| address.starts_with("172.20.10."))
+        .unwrap_or(false)
+}
+
+fn is_self_assigned_ipv4(value: Option<&str>) -> bool {
+    value
+        .map(|address| address.starts_with("169.254."))
+        .unwrap_or(false)
+}
+
+fn reliability_interface_kind(active_interface: &str, ipv4: Option<&str>) -> &'static str {
+    if is_iphone_hotspot_ipv4(ipv4) {
+        "iphone_usb"
+    } else if active_interface == "en0" {
+        "wifi"
+    } else if active_interface.starts_with("en") {
+        "wired"
+    } else {
+        "unknown"
+    }
+}
+
+fn reliability_path_notice(ipv4: Option<&str>) -> Option<&'static str> {
+    if is_iphone_hotspot_ipv4(ipv4) {
+        Some("This appears to be an iPhone hotspot or USB network path. Results may reflect mobile network, hotspot NAT, or carrier routing rather than a fixed home router path.")
+    } else if is_self_assigned_ipv4(ipv4) {
+        Some("The active interface has a self-assigned 169.254.x.x IPv4 address. DHCP, local link, Wi-Fi association, adapter, or switch path should be checked before external tests.")
+    } else {
+        None
+    }
+}
+
 fn json_number(value: Option<f64>) -> serde_json::Value {
     value
         .and_then(serde_json::Number::from_f64)
@@ -2080,6 +2114,17 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
         retest.push("Run the same check after any proxy, VPN, Wi-Fi, or adapter change.".to_string());
     }
 
+    if let Some(notice) = string_from_json(evidence, &["physicalLan", "networkPathNotice"]) {
+        if !key_evidence.iter().any(|item| item == &notice) {
+            key_evidence.push(notice);
+        }
+    }
+
+    if bool_from_json(evidence, &["physicalLan", "iphoneHotspotLikely"]) {
+        advice.push("Treat findings as mobile hotspot, hotspot NAT, or carrier-path observations until retested on the fixed LAN.".to_string());
+        retest.push("Retest on the fixed home or office LAN before assigning the fault to the router.".to_string());
+    }
+
     let overall_status = if [physical_status, dns_status, overlay_status, external_status].contains(&"critical") {
         "critical"
     } else if fault_domain != "none"
@@ -2364,7 +2409,9 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     let gateway_samples = gateway_ping_stats.samples_ms.clone();
     let ipv4 = parse_ifconfig_inet(&interface_detail.stdout);
     let ipv6 = parse_ifconfig_ipv6(&interface_detail.stdout);
-    let self_assigned = ipv4.as_deref().map(|value| value.starts_with("169.254.")).unwrap_or(false);
+    let self_assigned = is_self_assigned_ipv4(ipv4.as_deref());
+    let iphone_hotspot = is_iphone_hotspot_ipv4(ipv4.as_deref());
+    let network_path_notice = reliability_path_notice(ipv4.as_deref());
     let dhcp_dns = parse_dhcp_dns(&ipconfig.stdout);
     let system_dns = parse_scutil_dns_servers(&scutil_dns.stdout);
     let scoped_resolvers = parse_scutil_scoped_resolvers(&scutil_dns.stdout);
@@ -2410,7 +2457,7 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
         "Tailscale Remote Access"
     } else if overlay_count > 0 || default_route_interface.as_deref().unwrap_or("").starts_with("utun") {
         "VPN / Proxy Active"
-    } else if ipv4.as_deref().map(|value| value.starts_with("172.20.10.")).unwrap_or(false) {
+    } else if iphone_hotspot {
         "Mobile Hotspot"
     } else {
         "Home LAN"
@@ -2468,9 +2515,11 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
         "generatedAt": chrono::Local::now().to_rfc3339(),
         "physicalLan": {
             "activeInterface": active_interface.clone(),
-            "interfaceKind": if active_interface == "en0" { "wifi" } else { "wired" },
+            "interfaceKind": reliability_interface_kind(&active_interface, ipv4.as_deref()),
             "ipv4": ipv4,
             "ipv6": ipv6,
+            "iphoneHotspotLikely": iphone_hotspot,
+            "networkPathNotice": network_path_notice,
             "subnetMask": serde_json::Value::Null,
             "dhcpOk": !self_assigned && gateway.is_some(),
             "dhcpServer": parse_dhcp_value(&ipconfig.stdout, "server_identifier"),
@@ -2977,6 +3026,21 @@ mod tests {
         assert_eq!(stats.p95_ms, Some(4.0));
         assert_eq!(stats.p99_ms, Some(4.0));
         assert_eq!(stats.samples_ms.len(), 4);
+    }
+
+    #[test]
+    fn reliability_labels_hotspot_and_self_assigned_paths() {
+        assert_eq!(reliability_interface_kind("en6", Some("172.20.10.7")), "iphone_usb");
+        assert_eq!(reliability_interface_kind("en0", Some("192.168.50.20")), "wifi");
+        assert_eq!(reliability_interface_kind("en5", Some("192.168.50.21")), "wired");
+
+        let hotspot = reliability_path_notice(Some("172.20.10.7")).unwrap_or_default();
+        let self_assigned = reliability_path_notice(Some("169.254.10.20")).unwrap_or_default();
+
+        assert!(hotspot.contains("iPhone hotspot"));
+        assert!(hotspot.contains("carrier routing"));
+        assert!(self_assigned.contains("self-assigned 169.254.x.x"));
+        assert!(self_assigned.contains("DHCP"));
     }
 
     #[test]
