@@ -1605,7 +1605,44 @@ fn parse_ping_loss(output: &str) -> Option<f64> {
     })
 }
 
-fn parse_ping_avg_jitter(output: &str) -> (Option<f64>, Option<f64>) {
+#[derive(Clone, Debug, Default)]
+struct PingStats {
+    loss_pct: Option<f64>,
+    min_ms: Option<f64>,
+    avg_ms: Option<f64>,
+    max_ms: Option<f64>,
+    stddev_ms: Option<f64>,
+    jitter_ms: Option<f64>,
+    p50_ms: Option<f64>,
+    p95_ms: Option<f64>,
+    p99_ms: Option<f64>,
+    samples_ms: Vec<f64>,
+}
+
+fn parse_ping_samples(output: &str) -> Vec<f64> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let (_, value) = line.split_once("time=")?;
+            let number = value
+                .chars()
+                .take_while(|character| character.is_ascii_digit() || *character == '.')
+                .collect::<String>();
+            number.parse::<f64>().ok()
+        })
+        .collect()
+}
+
+fn percentile(sorted: &[f64], percentile: f64) -> Option<f64> {
+    if sorted.is_empty() {
+        return None;
+    }
+    let rank = ((percentile / 100.0) * sorted.len() as f64).ceil() as usize;
+    let index = rank.saturating_sub(1).min(sorted.len() - 1);
+    sorted.get(index).copied()
+}
+
+fn parse_ping_summary(output: &str) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
     for line in output.lines() {
         if let Some((_, values)) = line.split_once('=') {
             if line.contains("round-trip") || line.contains("rtt") {
@@ -1615,11 +1652,36 @@ fn parse_ping_avg_jitter(output: &str) -> (Option<f64>, Option<f64>) {
                     .split('/')
                     .filter_map(|value| value.parse::<f64>().ok())
                     .collect::<Vec<_>>();
-                return (parts.get(1).copied(), parts.get(3).copied());
+                return (
+                    parts.first().copied(),
+                    parts.get(1).copied(),
+                    parts.get(2).copied(),
+                    parts.get(3).copied(),
+                );
             }
         }
     }
-    (None, None)
+    (None, None, None, None)
+}
+
+fn parse_ping_stats(output: &str) -> PingStats {
+    let mut samples_ms = parse_ping_samples(output);
+    samples_ms.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+
+    let (summary_min, summary_avg, summary_max, summary_stddev) = parse_ping_summary(output);
+
+    PingStats {
+        loss_pct: parse_ping_loss(output),
+        min_ms: samples_ms.first().copied().or(summary_min),
+        avg_ms: summary_avg,
+        max_ms: samples_ms.last().copied().or(summary_max),
+        stddev_ms: summary_stddev,
+        jitter_ms: summary_stddev,
+        p50_ms: percentile(&samples_ms, 50.0),
+        p95_ms: percentile(&samples_ms, 95.0),
+        p99_ms: percentile(&samples_ms, 99.0),
+        samples_ms,
+    }
 }
 
 fn parse_listening_services(output: &str) -> Vec<serde_json::Value> {
@@ -2250,7 +2312,7 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     let gateway_ping_count = mode.gateway_sample_count();
     let ping_gateway = gateway
         .as_deref()
-        .map(|gateway_ip| capture_fixed("gateway-ping", "/sbin/ping", &["-c", gateway_ping_count, "-n", "-q", gateway_ip]));
+        .map(|gateway_ip| capture_fixed("gateway-ping", "/sbin/ping", &["-c", gateway_ping_count, "-n", gateway_ip]));
     let gateway_dns_start = Instant::now();
     let gateway_dns = if let Some(gateway_ip) = gateway.as_deref() {
         if let Some(dig) = command_path("dig") {
@@ -2286,13 +2348,20 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     ];
     let curl_captures = targets.map(capture_curl_target);
 
-    let (gateway_loss, gateway_avg, gateway_jitter) = ping_gateway
+    let gateway_ping_stats = ping_gateway
         .as_ref()
-        .map(|capture| {
-            let (average, jitter) = parse_ping_avg_jitter(&capture.stdout);
-            (parse_ping_loss(&capture.stdout), average, jitter)
-        })
-        .unwrap_or((None, None, None));
+        .map(|capture| parse_ping_stats(&capture.stdout))
+        .unwrap_or_default();
+    let gateway_loss = gateway_ping_stats.loss_pct;
+    let gateway_min = gateway_ping_stats.min_ms;
+    let gateway_avg = gateway_ping_stats.avg_ms;
+    let gateway_max = gateway_ping_stats.max_ms;
+    let gateway_stddev = gateway_ping_stats.stddev_ms;
+    let gateway_jitter = gateway_ping_stats.jitter_ms;
+    let gateway_p50 = gateway_ping_stats.p50_ms;
+    let gateway_p95 = gateway_ping_stats.p95_ms;
+    let gateway_p99 = gateway_ping_stats.p99_ms;
+    let gateway_samples = gateway_ping_stats.samples_ms.clone();
     let ipv4 = parse_ifconfig_inet(&interface_detail.stdout);
     let ipv6 = parse_ifconfig_ipv6(&interface_detail.stdout);
     let self_assigned = ipv4.as_deref().map(|value| value.starts_with("169.254.")).unwrap_or(false);
@@ -2410,8 +2479,15 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
             "dhcpLeaseSeconds": parse_dhcp_value(&ipconfig.stdout, "lease_time").and_then(|value| value.parse::<u64>().ok()),
             "gatewayIp": gateway,
             "gatewayPingLossPct": json_number(gateway_loss),
+            "gatewayPingMinMs": json_number(gateway_min),
             "gatewayPingAvgMs": json_number(gateway_avg),
+            "gatewayPingMaxMs": json_number(gateway_max),
+            "gatewayPingStddevMs": json_number(gateway_stddev),
             "gatewayPingJitterMs": json_number(gateway_jitter),
+            "gatewayPingP50Ms": json_number(gateway_p50),
+            "gatewayPingP95Ms": json_number(gateway_p95),
+            "gatewayPingP99Ms": json_number(gateway_p99),
+            "gatewayPingSamplesMs": gateway_samples,
             "gatewayPingSampleCount": gateway_ping_count.parse::<u64>().unwrap_or(0),
             "gatewayDnsMs": json_u64(gateway_dns_ms),
             "gatewayDnsTimedOut": gateway_dns.as_ref().map(|capture| !capture.success).unwrap_or(false),
@@ -2885,6 +2961,22 @@ mod tests {
         assert!(NetworkReliabilityMode::from_option(Some("other".to_string())).is_err());
         assert_eq!(NetworkReliabilityMode::Quick.gateway_sample_count(), "16");
         assert_eq!(NetworkReliabilityMode::Deep.gateway_sample_count(), "120");
+    }
+
+    #[test]
+    fn reliability_ping_stats_extracts_distribution() {
+        let output = "PING 192.0.2.1 (192.0.2.1): 56 data bytes\n64 bytes from 192.0.2.1: icmp_seq=0 ttl=64 time=1.000 ms\n64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=2.100 ms\n64 bytes from 192.0.2.1: icmp_seq=2 ttl=64 time=2.900 ms\n64 bytes from 192.0.2.1: icmp_seq=3 ttl=64 time=4.000 ms\n\n--- 192.0.2.1 ping statistics ---\n4 packets transmitted, 4 packets received, 0.0% packet loss\nround-trip min/avg/max/stddev = 1.000/2.500/4.000/1.118 ms\n";
+        let stats = parse_ping_stats(output);
+
+        assert_eq!(stats.loss_pct, Some(0.0));
+        assert_eq!(stats.min_ms, Some(1.0));
+        assert_eq!(stats.avg_ms, Some(2.5));
+        assert_eq!(stats.max_ms, Some(4.0));
+        assert_eq!(stats.stddev_ms, Some(1.118));
+        assert_eq!(stats.p50_ms, Some(2.1));
+        assert_eq!(stats.p95_ms, Some(4.0));
+        assert_eq!(stats.p99_ms, Some(4.0));
+        assert_eq!(stats.samples_ms.len(), 4);
     }
 
     #[test]
