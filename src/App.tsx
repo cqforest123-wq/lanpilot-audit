@@ -1947,8 +1947,29 @@ function SettingsPage() {
 
 function LanguageSelector() {
   const { locale, setLocale, t } = useI18n();
-  const names: Record<Locale, string> = { en:"English","zh-CN":"简体中文","zh-TW":"繁體中文",ja:"日本語",ko:"한국어",de:"Deutsch",fr:"Français",es:"Español","pt-BR":"Português (Brasil)",it:"Italiano",nl:"Nederlands" };
-  return <label className="language-selector"><span>{t("language")}</span><select aria-label={t("language")} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>{supportedLocales.map((item) => <option value={item} key={item}>{names[item]}</option>)}</select></label>;
+  const visibleLocales = ["en", "zh-CN"] as const;
+  const names: Record<(typeof visibleLocales)[number], string> = {
+    en: "English",
+    "zh-CN": "简体中文",
+  };
+  const selectedLocale = visibleLocales.includes(locale as (typeof visibleLocales)[number])
+    ? locale
+    : "en";
+
+  return (
+    <label className="language-selector">
+      <span>{t("language")}</span>
+      <select
+        aria-label={t("language")}
+        value={selectedLocale}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+      >
+        {visibleLocales.map((item) => (
+          <option value={item} key={item}>{names[item]}</option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
