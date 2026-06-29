@@ -232,6 +232,41 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock).toHaveBeenCalledWith("run_network_reliability_check", { mode: "quick" });
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
+
+  it("keeps Network Doctor demo data behind an explicit demo action", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_audit_interfaces") return Promise.resolve([{ name: "en6", ipv4: "172.20.10.7" }]);
+      return Promise.resolve(engineStatus);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+
+    expect(await screen.findByText("No real Network Doctor run yet")).toBeVisible();
+    expect(screen.queryByText("Demo Proxy Exit")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "View demo result" }));
+    expect(await screen.findByText(/Demo mode: synthetic example data is shown/)).toBeVisible();
+  });
+
+  it("downgrades self-assigned interfaces and keeps a valid physical interface selected", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_audit_interfaces") return Promise.resolve([
+        { name: "en8", ipv4: "169.254.10.20" },
+        { name: "en6", ipv4: "172.20.10.7" },
+      ]);
+      return Promise.resolve(engineStatus);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+
+    expect(await screen.findByText("Current auto selection: en6")).toBeVisible();
+    expect(screen.getByText("Self-assigned address")).toBeVisible();
+    expect(screen.getByText("State: Not recommended as the primary check interface")).toBeVisible();
+    expect(screen.getByText(/Mobile hotspot or USB tethering may affect/)).toBeVisible();
+  });
 });
 
 describe("localization", () => {

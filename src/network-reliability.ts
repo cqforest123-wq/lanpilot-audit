@@ -135,7 +135,7 @@ export const reliabilityThresholds = {
   wiredGatewayCriticalMs: 50,
   wifiGatewayWarningMs: 30,
   gatewayDnsWarningMs: 100,
-  systemDnsWarningMs: 300,
+  systemDnsWarningMs: 200,
   httpsTotalWarningMs: 3000,
   httpsTotalCriticalMs: 8000,
   tcpConnectWarningMs: 1000,
@@ -302,64 +302,82 @@ export function compareNetworkBaselines(previous: NetworkReliabilityEvidence, cu
 export function buildNetworkReliabilityMarkdown(diagnosis: NetworkReliabilityDiagnosis, evidence: NetworkReliabilityEvidence, language: "en" | "zh-CN" = "en"): string {
   const zh = language === "zh-CN";
   const heading = zh
-    ? ["# 网络可靠性报告", "## 总体诊断", "## 当前网络路径", "## 故障点", "## 影响判断", "## 关键证据", "## 处理建议", "## 复测方法", "## 物理网络", "## DNS", "## Overlay / 代理 / VPN", "## 外部网络", "## 本机监听服务", "## 原始证据"]
-    : ["# Network Reliability Report", "## Overall Diagnosis", "## Current Network Path", "## Fault Point", "## Impact", "## Key Evidence", "## Troubleshooting Advice", "## Retest Plan", "## Physical LAN", "## DNS", "## Overlay / Proxy / VPN", "## External Internet", "## Local Listening Services", "## Raw Evidence"];
+    ? ["# 网络医生报告", "## 运行元数据", "## 总体诊断", "## 当前网络路径", "## 故障点", "## 影响判断", "## 关键证据", "## 根因候选", "## 反向证据", "## 处理建议", "## 复测方法", "## 物理网络", "## DNS", "## Overlay / 代理 / VPN", "## 外部网络", "## 本机监听服务", "## 原始证据"]
+    : ["# Network Doctor Report", "## Run Metadata", "## Overall Diagnosis", "## Current Network Path", "## Fault Point", "## Impact", "## Key Evidence", "## Root Cause Candidates", "## Evidence Against", "## Troubleshooting Advice", "## Retest Plan", "## Physical LAN", "## DNS", "## Overlay / Proxy / VPN", "## External Internet", "## Local Listening Services", "## Raw Evidence"];
   const list = (values: string[]) => values.map((value) => `- ${value}`).join("\n") || "- None";
+  const overlayInterface = evidence.overlay.defaultRouteInterface?.startsWith("utun") ? evidence.overlay.defaultRouteInterface : "none";
   return `${heading[0]}
 
 ${heading[1]}
 
-${diagnosis.overallStatus}
+- resultMode: real
+- evidenceSource: local-collector
+- lastRunAt: ${evidence.generatedAt ?? "unknown"}
+- selectedInterface: ${evidence.physicalLan.activeInterface || "unknown"}
+- physicalInterface: ${evidence.physicalLan.activeInterface || "unknown"}
+- overlayInterface: ${overlayInterface}
 
 ${heading[2]}
 
-${diagnosis.currentPath}
+${diagnosis.overallStatus}
 
 ${heading[3]}
 
-${diagnosis.faultPoint}
+${diagnosis.currentPath}
 
 ${heading[4]}
 
-${diagnosis.impact}
+${diagnosis.faultPoint}
 
 ${heading[5]}
 
-${list(diagnosis.evidence)}
+${diagnosis.impact}
 
 ${heading[6]}
 
-${list(diagnosis.remediationAdvice)}
+${list(diagnosis.evidence)}
 
 ${heading[7]}
 
-${list(diagnosis.retestPlan)}
+- ${diagnosis.faultDomain}: ${diagnosis.faultPoint}
 
 ${heading[8]}
+
+- ${diagnosis.overallStatus === "healthy" ? "No strong counter-evidence is required for a healthy run." : "Compare gateway, DNS, overlay, and application timing before assigning ownership."}
+
+${heading[9]}
+
+${list(diagnosis.remediationAdvice)}
+
+${heading[10]}
+
+${list(diagnosis.retestPlan)}
+
+${heading[11]}
 
 - Interface: ${evidence.physicalLan.activeInterface}
 - Gateway: ${evidence.physicalLan.gatewayIp ?? "unknown"}
 - Gateway latency: ${formatMs(evidence.physicalLan.gatewayPingAvgMs)}
 
-${heading[9]}
+${heading[12]}
 
 - System DNS: ${evidence.localControlPlane.systemDnsServers.join(", ") || "unknown"}
 - Gateway DNS: ${formatMs(evidence.physicalLan.gatewayDnsMs)}
 
-${heading[10]}
+${heading[13]}
 
 - Default route interface: ${evidence.overlay.defaultRouteInterface ?? "unknown"}
 - Overlay components: ${overlayLabels(evidence.overlay).join(", ") || "none"}
 
-${heading[11]}
+${heading[14]}
 
 ${list(evidence.external.targets.map((target) => `${target.url}: total=${formatMs(target.totalMs)}, status=${target.status ?? "unknown"}`))}
 
-${heading[12]}
+${heading[15]}
 
 ${list(evidence.localControlPlane.listeningServices.map((service) => `${service.name} ${service.bindAddress}:${service.port}`))}
 
-${heading[13]}
+${heading[16]}
 
 ${list(diagnosis.rawEvidenceRefs)}
 `;
@@ -375,7 +393,9 @@ function physicalStatus(evidence: PhysicalLanEvidence): ReliabilityStatus {
 
 function dnsStatusFromEvidence(evidence: NetworkReliabilityEvidence): ReliabilityStatus {
   if (evidence.physicalLan.gatewayDnsTimedOut) return "critical";
+  const systemDnsSlow = evidence.external.targets.some((target) => (target.dnsMs ?? 0) >= reliabilityThresholds.systemDnsWarningMs);
   if ((evidence.physicalLan.gatewayDnsMs ?? 0) > reliabilityThresholds.gatewayDnsWarningMs) return "warning";
+  if (systemDnsSlow) return "warning";
   if (evidence.overlay.dnsViaOverlay || evidence.overlay.hasTailscaleDns100100 || evidence.overlay.hasTailscaleIpv6Dns) return "warning";
   return evidence.localControlPlane.systemDnsServers.length > 0 ? "healthy" : "unknown";
 }
@@ -408,10 +428,12 @@ function exposedLocalService(services: ListeningService[]): ListeningService | n
 }
 
 function networkPath(evidence: NetworkReliabilityEvidence): string {
-  if (evidence.overlay.tailscaleRunning && evidence.overlay.tailscaleExitNode) return "Mac -> Tailscale / utun -> Exit Node -> Internet";
-  if (evidence.overlay.stashDetected && evidence.overlay.stashTunDetected) return "Mac -> Stash TUN / utun -> Proxy rules -> Proxy exit -> Internet";
-  if ((evidence.overlay.defaultRouteInterface ?? "").startsWith("utun")) return "Mac -> Overlay / utun -> Remote path -> Internet";
-  return `Mac -> ${evidence.physicalLan.activeInterface} -> ${evidence.physicalLan.gatewayIp ?? "gateway"} -> ISP -> Internet`;
+  const physical = `${evidence.physicalLan.activeInterface || "interface"}${evidence.physicalLan.ipv4 ? ` / ${evidence.physicalLan.ipv4}` : ""}`;
+  const gateway = evidence.physicalLan.gatewayIp ?? "gateway not identified";
+  if (evidence.overlay.tailscaleRunning && evidence.overlay.tailscaleExitNode) return `Mac -> ${physical} -> ${gateway} -> Tailscale / ${evidence.overlay.defaultRouteInterface ?? "utun"} -> Exit Node -> Internet`;
+  if (evidence.overlay.stashDetected && evidence.overlay.stashTunDetected) return `Mac -> ${physical} -> ${gateway} -> Stash TUN / ${evidence.overlay.defaultRouteInterface ?? "utun"} -> Proxy exit -> Internet`;
+  if ((evidence.overlay.defaultRouteInterface ?? "").startsWith("utun")) return `Mac -> ${physical} -> ${gateway} -> Overlay / ${evidence.overlay.defaultRouteInterface} -> Remote path -> Internet`;
+  return `Mac -> ${physical} -> ${gateway} -> ISP -> Internet`;
 }
 
 function overlayLabels(evidence: OverlayEvidence): string[] {
