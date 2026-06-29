@@ -32,7 +32,10 @@ const ENGINE_SCRIPTS: [(&str, &str); 13] = [
     ("local_network_config", "09-local-network-config.sh"),
     ("mdns_observation", "10-mdns-observation.sh"),
     ("web_tls_baseline", "11-web-tls-baseline.sh"),
-    ("build_enhanced_governance_report", "12-build-enhanced-governance-report.py"),
+    (
+        "build_enhanced_governance_report",
+        "12-build-enhanced-governance-report.py",
+    ),
     ("build_formats", "13-build-formats.py"),
 ];
 
@@ -1029,28 +1032,58 @@ fn read_latest_report() -> Result<LatestReport, String> {
     )?;
     let evidence_index =
         read_optional_report_file(&latest_lab, "06-report/evidence-index.md", &mut Vec::new())?;
-    let asset_inventory =
-        read_optional_report_file(&latest_lab, "02-assets/asset-inventory.csv", &mut Vec::new())?;
-    let asset_inventory_summary =
-        read_optional_report_file(&latest_lab, "06-report/asset-inventory-summary.md", &mut Vec::new())?;
-    let service_exposure_matrix =
-        read_optional_report_file(&latest_lab, "03-services/service-exposure-matrix.csv", &mut Vec::new())?;
-    let service_exposure_summary =
-        read_optional_report_file(&latest_lab, "06-report/service-exposure-summary.md", &mut Vec::new())?;
-    let local_network_config =
-        read_optional_report_file(&latest_lab, "01-baseline/local-network-config.json", &mut Vec::new())?;
-    let mdns_services =
-        read_optional_report_file(&latest_lab, "03-services/mdns-services.csv", &mut Vec::new())?;
+    let asset_inventory = read_optional_report_file(
+        &latest_lab,
+        "02-assets/asset-inventory.csv",
+        &mut Vec::new(),
+    )?;
+    let asset_inventory_summary = read_optional_report_file(
+        &latest_lab,
+        "06-report/asset-inventory-summary.md",
+        &mut Vec::new(),
+    )?;
+    let service_exposure_matrix = read_optional_report_file(
+        &latest_lab,
+        "03-services/service-exposure-matrix.csv",
+        &mut Vec::new(),
+    )?;
+    let service_exposure_summary = read_optional_report_file(
+        &latest_lab,
+        "06-report/service-exposure-summary.md",
+        &mut Vec::new(),
+    )?;
+    let local_network_config = read_optional_report_file(
+        &latest_lab,
+        "01-baseline/local-network-config.json",
+        &mut Vec::new(),
+    )?;
+    let mdns_services = read_optional_report_file(
+        &latest_lab,
+        "03-services/mdns-services.csv",
+        &mut Vec::new(),
+    )?;
     let web_baseline =
         read_optional_report_file(&latest_lab, "03-services/web-baseline.csv", &mut Vec::new())?;
-    let tls_certificates =
-        read_optional_report_file(&latest_lab, "03-services/tls-certificates.csv", &mut Vec::new())?;
-    let snapshot_diff =
-        read_optional_report_file(&latest_lab, "07-history/snapshot-diff.json", &mut Vec::new())?;
-    let remediation_tracking =
-        read_optional_report_file(&latest_lab, "05-remediation/remediation-tracking.csv", &mut Vec::new())?;
-    let governance_summary =
-        read_optional_report_file(&latest_lab, "06-report/governance-summary.json", &mut Vec::new())?;
+    let tls_certificates = read_optional_report_file(
+        &latest_lab,
+        "03-services/tls-certificates.csv",
+        &mut Vec::new(),
+    )?;
+    let snapshot_diff = read_optional_report_file(
+        &latest_lab,
+        "07-history/snapshot-diff.json",
+        &mut Vec::new(),
+    )?;
+    let remediation_tracking = read_optional_report_file(
+        &latest_lab,
+        "05-remediation/remediation-tracking.csv",
+        &mut Vec::new(),
+    )?;
+    let governance_summary = read_optional_report_file(
+        &latest_lab,
+        "06-report/governance-summary.json",
+        &mut Vec::new(),
+    )?;
     let findings = parse_findings(risk_register.as_deref())?;
     let has_risk_register = risk_register.is_some();
     let count_severity = |severity: &str| {
@@ -1167,18 +1200,28 @@ fn save_remediation_tracking(records: Vec<RemediationRecord>) -> Result<(), Stri
     let mut writer = csv::Writer::from_path(&path)
         .map_err(|error| format!("Unable to write remediation tracker: {error}"))?;
     for record in records {
-        writer.serialize(record).map_err(|error| format!("Unable to serialize remediation tracker: {error}"))?;
+        writer
+            .serialize(record)
+            .map_err(|error| format!("Unable to serialize remediation tracker: {error}"))?;
     }
-    writer.flush().map_err(|error| format!("Unable to flush remediation tracker: {error}"))
+    writer
+        .flush()
+        .map_err(|error| format!("Unable to flush remediation tracker: {error}"))
 }
 
 fn validate_remediation_pack(pack: &RemediationPack) -> Result<(), String> {
     const ALLOWED_STATUSES: [&str; 7] = [
-        "open", "assigned", "in_progress", "remediated", "accepted_risk", "retest_required",
+        "open",
+        "assigned",
+        "in_progress",
+        "remediated",
+        "accepted_risk",
+        "retest_required",
         "verified",
     ];
     const ALLOWED_SEVERITIES: [&str; 4] = ["High", "Medium", "Low", "Routine"];
-    if pack.tickets.len() > 500 || pack.findings.len() > 500 || pack.acceptance_records.len() > 500 {
+    if pack.tickets.len() > 500 || pack.findings.len() > 500 || pack.acceptance_records.len() > 500
+    {
         return Err("Remediation pack exceeds the supported record limit.".to_string());
     }
     let valid = |value: &str, maximum: usize| value.len() <= maximum && !value.contains('\0');
@@ -1186,7 +1229,10 @@ fn validate_remediation_pack(pack: &RemediationPack) -> Result<(), String> {
         || !valid(&pack.generated_at, 80)
         || !valid(&pack.lab_directory, 1000)
         || !valid(&pack.language, 20)
-        || pack.verification_plan.iter().any(|value| !valid(value, 2000))
+        || pack
+            .verification_plan
+            .iter()
+            .any(|value| !valid(value, 2000))
     {
         return Err("Remediation pack contains an unsupported value.".to_string());
     }
@@ -1204,9 +1250,18 @@ fn validate_remediation_pack(pack: &RemediationPack) -> Result<(), String> {
             || !ALLOWED_STATUSES.contains(&ticket.status.as_str())
             || !ALLOWED_SEVERITIES.contains(&ticket.priority.as_str())
             || ticket.manual_steps.iter().any(|value| !valid(value, 2000))
-            || ticket.validation_steps.iter().any(|value| !valid(value, 2000))
-            || ticket.rollback_considerations.iter().any(|value| !valid(value, 2000))
-            || ticket.evidence_references.iter().any(|value| !valid(value, 500))
+            || ticket
+                .validation_steps
+                .iter()
+                .any(|value| !valid(value, 2000))
+            || ticket
+                .rollback_considerations
+                .iter()
+                .any(|value| !valid(value, 2000))
+            || ticket
+                .evidence_references
+                .iter()
+                .any(|value| !valid(value, 500))
         {
             return Err("Remediation pack contains an unsupported ticket value.".to_string());
         }
@@ -1240,7 +1295,9 @@ fn write_remediation_pack(directory: &Path, pack: &RemediationPack) -> Result<()
     for file in fixed_files {
         let path = directory.join(file);
         if path.exists() && !is_regular_file(&path) {
-            return Err(format!("Remediation output path is not a regular file: {file}"));
+            return Err(format!(
+                "Remediation output path is not a regular file: {file}"
+            ));
         }
     }
     let json = serde_json::to_string_pretty(pack)
@@ -1250,24 +1307,58 @@ fn write_remediation_pack(directory: &Path, pack: &RemediationPack) -> Result<()
 
     let mut tickets = csv::Writer::from_path(directory.join("remediation-tickets.csv"))
         .map_err(|error| format!("Unable to write remediation tickets: {error}"))?;
-    tickets.write_record([
-        "id", "finding_fingerprint", "severity", "asset", "category", "finding",
-        "recommended_action", "owner", "due_date", "priority", "status",
-        "business_justification", "manual_steps", "validation_steps",
-        "rollback_considerations", "evidence_references", "notes",
-    ]).map_err(|error| format!("Unable to write remediation ticket header: {error}"))?;
+    tickets
+        .write_record([
+            "id",
+            "finding_fingerprint",
+            "severity",
+            "asset",
+            "category",
+            "finding",
+            "recommended_action",
+            "owner",
+            "due_date",
+            "priority",
+            "status",
+            "business_justification",
+            "manual_steps",
+            "validation_steps",
+            "rollback_considerations",
+            "evidence_references",
+            "notes",
+        ])
+        .map_err(|error| format!("Unable to write remediation ticket header: {error}"))?;
     for ticket in &pack.tickets {
-        tickets.write_record([
-            &ticket.id, &ticket.finding_fingerprint, &ticket.severity, &ticket.asset, &ticket.category,
-            &ticket.localized_finding, &ticket.localized_recommended_action, &ticket.owner, &ticket.due_date,
-            &ticket.priority, &ticket.status, &ticket.business_justification, &ticket.manual_steps.join(" | "),
-            &ticket.validation_steps.join(" | "), &ticket.rollback_considerations.join(" | "),
-            &ticket.evidence_references.join(" | "), &ticket.notes,
-        ]).map_err(|error| format!("Unable to serialize remediation ticket: {error}"))?;
+        tickets
+            .write_record([
+                &ticket.id,
+                &ticket.finding_fingerprint,
+                &ticket.severity,
+                &ticket.asset,
+                &ticket.category,
+                &ticket.localized_finding,
+                &ticket.localized_recommended_action,
+                &ticket.owner,
+                &ticket.due_date,
+                &ticket.priority,
+                &ticket.status,
+                &ticket.business_justification,
+                &ticket.manual_steps.join(" | "),
+                &ticket.validation_steps.join(" | "),
+                &ticket.rollback_considerations.join(" | "),
+                &ticket.evidence_references.join(" | "),
+                &ticket.notes,
+            ])
+            .map_err(|error| format!("Unable to serialize remediation ticket: {error}"))?;
     }
-    tickets.flush().map_err(|error| format!("Unable to flush remediation tickets: {error}"))?;
+    tickets
+        .flush()
+        .map_err(|error| format!("Unable to flush remediation tickets: {error}"))?;
 
-    let mut playbook = format!("# Remediation Playbook\n\nGenerated: {}\n\n", pack.generated_at);
+    let mut playbook = format!(
+        "# Remediation Playbook\n\nGenerated: {}\n\n",
+        pack.generated_at
+    );
     for ticket in &pack.tickets {
         playbook.push_str(&format!(
             "## {} - {}\n\n**Asset:** {}\n\n**Recommended action:** {}\n\n### Manual steps\n{}\n\n### Validation steps\n{}\n\n### Rollback considerations\n{}\n\n",
@@ -1280,14 +1371,30 @@ fn write_remediation_pack(directory: &Path, pack: &RemediationPack) -> Result<()
         .map_err(|error| format!("Unable to write remediation playbook: {error}"))?;
     fs::write(
         directory.join("remediation-verification-plan.md"),
-        format!("# Remediation Verification Plan\n\n{}\n", numbered_markdown(&pack.verification_plan)),
-    ).map_err(|error| format!("Unable to write remediation verification plan: {error}"))?;
+        format!(
+            "# Remediation Verification Plan\n\n{}\n",
+            numbered_markdown(&pack.verification_plan)
+        ),
+    )
+    .map_err(|error| format!("Unable to write remediation verification plan: {error}"))?;
 
-    let mut acceptance = csv::Writer::from_path(directory.join("remediation-acceptance-records.csv"))
-        .map_err(|error| format!("Unable to write acceptance records: {error}"))?;
-    acceptance.write_record(["ticket_id", "decision", "owner", "approved_at", "expires_at", "business_justification", "notes"])
+    let mut acceptance =
+        csv::Writer::from_path(directory.join("remediation-acceptance-records.csv"))
+            .map_err(|error| format!("Unable to write acceptance records: {error}"))?;
+    acceptance
+        .write_record([
+            "ticket_id",
+            "decision",
+            "owner",
+            "approved_at",
+            "expires_at",
+            "business_justification",
+            "notes",
+        ])
         .map_err(|error| format!("Unable to write acceptance record header: {error}"))?;
-    acceptance.flush().map_err(|error| format!("Unable to flush acceptance records: {error}"))?;
+    acceptance
+        .flush()
+        .map_err(|error| format!("Unable to flush acceptance records: {error}"))?;
     Ok(())
 }
 
@@ -1518,11 +1625,17 @@ fn is_observable_interface(name: &str) -> bool {
         && !name.starts_with("awdl")
         && !name.starts_with("llw")
         && !name.starts_with("bridge")
-        && name.chars().all(|character| character.is_ascii_alphanumeric())
+        && name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
 }
 
-fn choose_reliability_interface(ifconfig_list: &str, default_route_interface: Option<&str>) -> String {
-    if let Some(interface) = default_route_interface.filter(|value| is_observable_interface(value)) {
+fn choose_reliability_interface(
+    ifconfig_list: &str,
+    default_route_interface: Option<&str>,
+) -> String {
+    if let Some(interface) = default_route_interface.filter(|value| is_observable_interface(value))
+    {
         return interface.to_string();
     }
     ifconfig_list
@@ -1723,7 +1836,9 @@ fn parse_curl_timing(url: &str, output: &CommandCapture) -> serde_json::Value {
                 "ttfb" => ttfb_ms = seconds_to_ms(value),
                 "total" => total_ms = seconds_to_ms(value),
                 "status" => status = value.parse::<u16>().ok(),
-                "remote" => remote_ip = (!value.trim().is_empty()).then(|| value.trim().to_string()),
+                "remote" => {
+                    remote_ip = (!value.trim().is_empty()).then(|| value.trim().to_string())
+                }
                 _ => {}
             }
         }
@@ -1739,6 +1854,79 @@ fn parse_curl_timing(url: &str, output: &CommandCapture) -> serde_json::Value {
         "status": status,
         "remoteIp": remote_ip,
         "failed": !output.success
+    })
+}
+
+fn parse_dig_query_time_ms(output: &str) -> Option<u64> {
+    output.lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix("Query time:")
+            .and_then(|value| value.trim().strip_suffix("msec"))
+            .and_then(|value| value.trim().parse::<u64>().ok())
+    })
+}
+
+fn parse_dig_answer_ipv4(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() >= 5 && fields[3] == "A" && fields[4].split('.').count() == 4 {
+            Some(fields[4].to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn dig_query_status(capture: &CommandCapture) -> &'static str {
+    let combined = format!("{}\n{}", capture.stdout, capture.stderr).to_lowercase();
+    if capture.success {
+        "ok"
+    } else if combined.contains("timed out") || combined.contains("no servers could be reached") {
+        "timed_out"
+    } else {
+        "failed"
+    }
+}
+
+fn capture_dns_resolver(
+    label: &str,
+    resolver: &str,
+    host: &str,
+    dig_command: &str,
+) -> CommandCapture {
+    let server = format!("@{resolver}");
+    capture_fixed(
+        label,
+        dig_command,
+        &[server.as_str(), host, "A", "+time=2", "+tries=1", "+stats"],
+    )
+}
+
+fn dns_resolver_via_overlay(resolver: &str, default_route_interface: Option<&str>) -> bool {
+    resolver == "100.100.100.100"
+        || resolver.to_lowercase().starts_with("fd7a:115c:a1e0")
+        || resolver.starts_with("198.18.")
+        || default_route_interface
+            .map(|value| value.starts_with("utun"))
+            .unwrap_or(false)
+}
+
+fn build_dns_resolver_check(
+    name: &str,
+    address: &str,
+    capture: &CommandCapture,
+    via_overlay: bool,
+    fallback_ms: Option<u64>,
+) -> serde_json::Value {
+    let response_ms = parse_dig_query_time_ms(&capture.stdout).or(fallback_ms);
+    serde_json::json!({
+        "name": name,
+        "address": address,
+        "queryStatus": dig_query_status(capture),
+        "responseMs": response_ms,
+        "resolvedIp": parse_dig_answer_ipv4(&capture.stdout),
+        "viaOverlay": via_overlay
     })
 }
 
@@ -1870,9 +2058,49 @@ fn dns_status_from_evidence(evidence: &serde_json::Value) -> &'static str {
         return "critical";
     }
     let gateway_dns = number_from_json(evidence, &["physicalLan", "gatewayDnsMs"]).unwrap_or(0.0);
-    let system_dns_slow = external_targets(evidence)
-        .iter()
-        .any(|target| target.get("dnsMs").and_then(serde_json::Value::as_f64).unwrap_or(0.0) >= 200.0);
+    let resolver_checks = evidence
+        .get("localControlPlane")
+        .and_then(|value| value.get("resolverChecks"))
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if !resolver_checks.is_empty() {
+        let failed = resolver_checks
+            .iter()
+            .filter(|check| {
+                check
+                    .get("queryStatus")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("failed")
+                    != "ok"
+            })
+            .count();
+        if failed == resolver_checks.len() {
+            return "critical";
+        }
+        let slow_or_failed = resolver_checks.iter().any(|check| {
+            check
+                .get("queryStatus")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("failed")
+                != "ok"
+                || check
+                    .get("responseMs")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0)
+                    >= 200.0
+        });
+        if slow_or_failed {
+            return "warning";
+        }
+    }
+    let system_dns_slow = external_targets(evidence).iter().any(|target| {
+        target
+            .get("dnsMs")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+            >= 200.0
+    });
     if gateway_dns > 100.0
         || system_dns_slow
         || bool_from_json(evidence, &["overlay", "dnsViaOverlay"])
@@ -1888,7 +2116,8 @@ fn dns_status_from_evidence(evidence: &serde_json::Value) -> &'static str {
 }
 
 fn overlay_status_from_evidence(evidence: &serde_json::Value) -> &'static str {
-    let default_route = string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
+    let default_route =
+        string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
     if bool_from_json(evidence, &["overlay", "multipleOverlayComponents"])
         || bool_from_json(evidence, &["overlay", "tailscaleExitNode"])
         || bool_from_json(evidence, &["overlay", "stashTunDetected"])
@@ -1907,17 +2136,41 @@ fn external_status_from_evidence(evidence: &serde_json::Value) -> &'static str {
     }
     let failures = targets
         .iter()
-        .filter(|target| target.get("failed").and_then(serde_json::Value::as_bool).unwrap_or(false))
+        .filter(|target| {
+            target
+                .get("failed")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        })
         .count();
     if failures == targets.len() {
         return "critical";
     }
     let slow = targets.iter().any(|target| {
-        target.get("failed").and_then(serde_json::Value::as_bool).unwrap_or(false)
-            || target.get("totalMs").and_then(serde_json::Value::as_f64).unwrap_or(0.0) > 3000.0
-            || target.get("tcpConnectMs").and_then(serde_json::Value::as_f64).unwrap_or(0.0) > 1000.0
-            || target.get("tlsMs").and_then(serde_json::Value::as_f64).unwrap_or(0.0) > 1500.0
-            || target.get("ttfbMs").and_then(serde_json::Value::as_f64).unwrap_or(0.0) > 2000.0
+        target
+            .get("failed")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+            || target
+                .get("totalMs")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+                > 3000.0
+            || target
+                .get("tcpConnectMs")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+                > 1000.0
+            || target
+                .get("tlsMs")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+                > 1500.0
+            || target
+                .get("ttfbMs")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+                > 2000.0
     });
     if slow {
         "warning"
@@ -1935,11 +2188,16 @@ fn exposed_local_service(evidence: &serde_json::Value) -> Option<String> {
         .and_then(|services| {
             services.iter().find_map(|service| {
                 let port = service.get("port").and_then(serde_json::Value::as_u64)?;
-                let bind = service.get("bindAddress").and_then(serde_json::Value::as_str)?;
+                let bind = service
+                    .get("bindAddress")
+                    .and_then(serde_json::Value::as_str)?;
                 (PORTS.contains(&port) && matches!(bind, "0.0.0.0" | "*" | "::")).then(|| {
                     format!(
                         "{} listens on {bind}:{port}",
-                        service.get("name").and_then(serde_json::Value::as_str).unwrap_or("Service")
+                        service
+                            .get("name")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("Service")
                     )
                 })
             })
@@ -1947,21 +2205,38 @@ fn exposed_local_service(evidence: &serde_json::Value) -> Option<String> {
 }
 
 fn network_path_from_evidence(evidence: &serde_json::Value) -> String {
-    let interface = string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "interface".to_string());
+    let interface = string_from_json(evidence, &["physicalLan", "activeInterface"])
+        .unwrap_or_else(|| "interface".to_string());
     let local_ip = string_from_json(evidence, &["physicalLan", "ipv4"]);
     let physical = local_ip
         .map(|ip| format!("{interface} / {ip}"))
         .unwrap_or(interface);
-    let gateway = string_from_json(evidence, &["physicalLan", "gatewayIp"]).unwrap_or_else(|| "gateway not identified".to_string());
-    let default_route = string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
+    let gateway = string_from_json(evidence, &["physicalLan", "gatewayIp"])
+        .unwrap_or_else(|| "gateway not identified".to_string());
+    let default_route =
+        string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
     if bool_from_json(evidence, &["overlay", "tailscaleRunning"])
         && bool_from_json(evidence, &["overlay", "tailscaleExitNode"])
     {
-        format!("Mac -> {physical} -> {gateway} -> Tailscale / {} -> Exit Node -> Internet", if default_route.is_empty() { "utun" } else { default_route.as_str() })
+        format!(
+            "Mac -> {physical} -> {gateway} -> Tailscale / {} -> Exit Node -> Internet",
+            if default_route.is_empty() {
+                "utun"
+            } else {
+                default_route.as_str()
+            }
+        )
     } else if bool_from_json(evidence, &["overlay", "stashDetected"])
         && bool_from_json(evidence, &["overlay", "stashTunDetected"])
     {
-        format!("Mac -> {physical} -> {gateway} -> Stash TUN / {} -> Proxy exit -> Internet", if default_route.is_empty() { "utun" } else { default_route.as_str() })
+        format!(
+            "Mac -> {physical} -> {gateway} -> Stash TUN / {} -> Proxy exit -> Internet",
+            if default_route.is_empty() {
+                "utun"
+            } else {
+                default_route.as_str()
+            }
+        )
     } else if default_route.starts_with("utun") {
         format!("Mac -> {physical} -> {gateway} -> Overlay / {default_route} -> Remote path -> Internet")
     } else {
@@ -1974,10 +2249,13 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
     let dns_status = dns_status_from_evidence(evidence);
     let overlay_status = overlay_status_from_evidence(evidence);
     let external_status = external_status_from_evidence(evidence);
-    let gateway_loss = number_from_json(evidence, &["physicalLan", "gatewayPingLossPct"]).unwrap_or(0.0);
-    let gateway_latency = number_from_json(evidence, &["physicalLan", "gatewayPingAvgMs"]).unwrap_or(0.0);
+    let gateway_loss =
+        number_from_json(evidence, &["physicalLan", "gatewayPingLossPct"]).unwrap_or(0.0);
+    let gateway_latency =
+        number_from_json(evidence, &["physicalLan", "gatewayPingAvgMs"]).unwrap_or(0.0);
     let gateway_dns = number_from_json(evidence, &["physicalLan", "gatewayDnsMs"]).unwrap_or(0.0);
-    let default_route = string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
+    let default_route =
+        string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
     let all_external_failed = external_status == "critical";
     let external_slow = external_status == "warning" || all_external_failed;
     let physical_healthy = physical_status == "healthy";
@@ -1987,7 +2265,8 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
 
     let mut fault_domain = "none";
     let mut fault_point = "No clear fault point detected.".to_string();
-    let mut impact = "No immediate user-visible impact is indicated by the supplied observations.".to_string();
+    let mut impact =
+        "No immediate user-visible impact is indicated by the supplied observations.".to_string();
     let mut key_evidence = Vec::new();
     let mut advice = Vec::new();
     let mut retest = Vec::new();
@@ -1999,30 +2278,53 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
         fault_domain = "dhcp";
         fault_point = "DHCP or local link issue detected.".to_string();
         impact = "The Mac may not have a usable local network path.".to_string();
-        key_evidence.push("The active interface does not have a complete DHCP address, router, and DNS set.".to_string());
+        key_evidence.push(
+            "The active interface does not have a complete DHCP address, router, and DNS set."
+                .to_string(),
+        );
         key_evidence.push(format!(
             "Interface {} has IPv4 {}.",
-            string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "unknown".to_string()),
-            string_from_json(evidence, &["physicalLan", "ipv4"]).unwrap_or_else(|| "none".to_string())
+            string_from_json(evidence, &["physicalLan", "activeInterface"])
+                .unwrap_or_else(|| "unknown".to_string()),
+            string_from_json(evidence, &["physicalLan", "ipv4"])
+                .unwrap_or_else(|| "none".to_string())
         ));
-        advice.push("Check router DHCP service and the local link before testing external sites.".to_string());
-        advice.push("Check cable, Wi-Fi association, adapter, or switch port outside LANPilot.".to_string());
-        retest.push("Renew the lease outside LANPilot, then run Network Reliability again.".to_string());
+        advice.push(
+            "Check router DHCP service and the local link before testing external sites."
+                .to_string(),
+        );
+        advice.push(
+            "Check cable, Wi-Fi association, adapter, or switch port outside LANPilot.".to_string(),
+        );
+        retest.push(
+            "Renew the lease outside LANPilot, then run Network Reliability again.".to_string(),
+        );
     } else if physical_status == "critical" || gateway_loss > 0.0 || gateway_latency > 50.0 {
         fault_domain = "gateway";
         fault_point = "Local gateway or physical link instability detected.".to_string();
         impact = "Local network instability can affect DNS, browsing, and app connectivity before traffic reaches the internet.".to_string();
         key_evidence.push(format!("Gateway packet loss is {gateway_loss}%."));
         key_evidence.push(format!("Gateway average latency is {gateway_latency} ms."));
-        advice.push("Check Ethernet cable, switch port, router load, and USB Ethernet adapter.".to_string());
-        advice.push("Retest with the current physical path isolated from overlay and proxy changes.".to_string());
-        retest.push("Run gateway ping and gateway DNS timing again after the physical path is checked.".to_string());
+        advice.push(
+            "Check Ethernet cable, switch port, router load, and USB Ethernet adapter.".to_string(),
+        );
+        advice.push(
+            "Retest with the current physical path isolated from overlay and proxy changes."
+                .to_string(),
+        );
+        retest.push(
+            "Run gateway ping and gateway DNS timing again after the physical path is checked."
+                .to_string(),
+        );
     } else if physical_healthy && gateway_dns > 100.0 {
         fault_domain = "local_dns";
         fault_point = "Local DNS resolver or router DNS forwarding issue detected.".to_string();
-        impact = "Name resolution can be slow even when the local gateway is reachable.".to_string();
+        impact =
+            "Name resolution can be slow even when the local gateway is reachable.".to_string();
         key_evidence.push(format!("Gateway DNS timing is {gateway_dns} ms."));
-        key_evidence.push(format!("Gateway ping loss is {gateway_loss}% with average latency {gateway_latency} ms."));
+        key_evidence.push(format!(
+            "Gateway ping loss is {gateway_loss}% with average latency {gateway_latency} ms."
+        ));
         advice.push("Check router DNS forwarding and upstream DNS settings.".to_string());
         advice.push("Compare system DNS with direct gateway DNS, then review overlay DNS policy if present.".to_string());
         retest.push("Retest gateway DNS and system DNS separately.".to_string());
@@ -2035,64 +2337,105 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
         fault_domain = "tailscale_exit_node";
         fault_point = "Tailscale Exit Node may be affecting external connectivity.".to_string();
         impact = "External traffic may be routed through a remote exit path instead of the local ISP path.".to_string();
-        key_evidence.push("Default route uses an overlay interface while Tailscale is running as an exit path.".to_string());
+        key_evidence.push(
+            "Default route uses an overlay interface while Tailscale is running as an exit path."
+                .to_string(),
+        );
         key_evidence.push("DNS uses Tailscale DNS and HTTPS timing is slow or failed.".to_string());
         advice.push("Disable Exit Node outside LANPilot and retest.".to_string());
         advice.push("Disable Tailscale DNS if it is not needed for this workflow.".to_string());
-        retest.push("Compare external HTTPS timing before and after the Exit Node change.".to_string());
+        retest.push(
+            "Compare external HTTPS timing before and after the Exit Node change.".to_string(),
+        );
     } else if bool_from_json(evidence, &["overlay", "multipleOverlayComponents"])
         && default_route_overlay
         && bool_from_json(evidence, &["overlay", "dnsViaOverlay"])
     {
         fault_domain = "overlay_proxy";
-        fault_point = "Multiple overlay or proxy components are present and may conflict.".to_string();
+        fault_point =
+            "Multiple overlay or proxy components are present and may conflict.".to_string();
         impact = "Routing and DNS may be controlled by different local components, causing inconsistent connectivity.".to_string();
         key_evidence.push(format!("Default route interface is {default_route}."));
         key_evidence.push("Multiple overlay components and overlay DNS were detected.".to_string());
         advice.push("Choose one component to control general internet access.".to_string());
-        advice.push("Avoid enabling multiple overlay route controllers at the same time.".to_string());
-        retest.push("Retest default route and DNS after changing overlay state outside LANPilot.".to_string());
+        advice.push(
+            "Avoid enabling multiple overlay route controllers at the same time.".to_string(),
+        );
+        retest.push(
+            "Retest default route and DNS after changing overlay state outside LANPilot."
+                .to_string(),
+        );
     } else if let Some(local_service) = exposed_local_service(evidence) {
         fault_domain = "local_service_exposure";
         fault_point = "Local development service may be reachable from the LAN.".to_string();
-        impact = "A local service that should be private may be visible to nearby network clients.".to_string();
+        impact = "A local service that should be private may be visible to nearby network clients."
+            .to_string();
         key_evidence.push(local_service);
         key_evidence.push("The service is not limited to the loopback address.".to_string());
-        advice.push("Bind development services to 127.0.0.1 if LAN access is not required.".to_string());
-        advice.push("Avoid exposing local databases to the LAN unless it is intentional and documented.".to_string());
+        advice.push(
+            "Bind development services to 127.0.0.1 if LAN access is not required.".to_string(),
+        );
+        advice.push(
+            "Avoid exposing local databases to the LAN unless it is intentional and documented."
+                .to_string(),
+        );
         retest.push("Retest local listening services after changing the service bind address outside LANPilot.".to_string());
     } else if physical_healthy
         && bool_from_json(evidence, &["overlay", "stashDetected"])
         && bool_from_json(evidence, &["overlay", "stashTunDetected"])
         && default_route_overlay
     {
-        fault_domain = if external_slow { "overlay_proxy" } else { "none" };
+        fault_domain = if external_slow {
+            "overlay_proxy"
+        } else {
+            "none"
+        };
         fault_point = if external_slow {
             "Proxy overlay path is the likely place to inspect.".to_string()
         } else {
             "Physical LAN is healthy; internet path is currently handled by Stash TUN.".to_string()
         };
         impact = if external_slow {
-            "External access may depend on proxy node, rule, DNS policy, or proxy exit quality.".to_string()
+            "External access may depend on proxy node, rule, DNS policy, or proxy exit quality."
+                .to_string()
         } else {
-            "No physical LAN fault is indicated; traffic is intentionally using an overlay path.".to_string()
+            "No physical LAN fault is indicated; traffic is intentionally using an overlay path."
+                .to_string()
         };
-        key_evidence.push("Physical LAN has DHCP, router, and stable gateway reachability.".to_string());
-        key_evidence.push("Default route uses an overlay interface and Stash indicators are present.".to_string());
+        key_evidence
+            .push("Physical LAN has DHCP, router, and stable gateway reachability.".to_string());
+        key_evidence.push(
+            "Default route uses an overlay interface and Stash indicators are present.".to_string(),
+        );
         advice.push("If external access is slow, check Stash node, rule routing, DNS policy, and proxy exit.".to_string());
-        advice.push("Compare direct gateway DNS with system DNS before blaming the router.".to_string());
+        advice.push(
+            "Compare direct gateway DNS with system DNS before blaming the router.".to_string(),
+        );
         retest.push("Retest once with the overlay disabled outside LANPilot, then retest with Stash enabled.".to_string());
     } else if physical_healthy && all_external_failed && default_route_overlay {
         fault_domain = "overlay_proxy";
-        fault_point = "External connectivity failure is likely in the overlay or proxy path.".to_string();
-        impact = "Local LAN appears usable, but internet access through the overlay path fails.".to_string();
+        fault_point =
+            "External connectivity failure is likely in the overlay or proxy path.".to_string();
+        impact = "Local LAN appears usable, but internet access through the overlay path fails."
+            .to_string();
         key_evidence.push("Gateway reachability and DNS are healthy.".to_string());
-        key_evidence.push("All external HTTPS targets failed while default route uses an overlay interface.".to_string());
-        advice.push("Check proxy account, node health, firewall policy, and DNS policy.".to_string());
+        key_evidence.push(
+            "All external HTTPS targets failed while default route uses an overlay interface."
+                .to_string(),
+        );
+        advice
+            .push("Check proxy account, node health, firewall policy, and DNS policy.".to_string());
         advice.push("Retest direct gateway path outside LANPilot.".to_string());
-        retest.push("Run Network Reliability again after changing the overlay state outside LANPilot.".to_string());
+        retest.push(
+            "Run Network Reliability again after changing the overlay state outside LANPilot."
+                .to_string(),
+        );
     } else if physical_healthy && external_slow {
-        fault_domain = if default_route_overlay { "proxy_exit" } else { "external_path" };
+        fault_domain = if default_route_overlay {
+            "proxy_exit"
+        } else {
+            "external_path"
+        };
         fault_point = if default_route_overlay {
             "Proxy exit or external path performance issue detected.".to_string()
         } else {
@@ -2100,18 +2443,36 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
         };
         impact = "Local LAN checks are healthy, so user-visible slowness is likely beyond the local gateway.".to_string();
         key_evidence.push("Gateway ping and local DNS are healthy.".to_string());
-        key_evidence.push("DNS, TCP, TLS, TTFB, or total HTTPS timing is slow for one or more external targets.".to_string());
-        advice.push("Check proxy node, ISP route, target service status, and CDN region.".to_string());
+        key_evidence.push(
+            "DNS, TCP, TLS, TTFB, or total HTTPS timing is slow for one or more external targets."
+                .to_string(),
+        );
+        advice.push(
+            "Check proxy node, ISP route, target service status, and CDN region.".to_string(),
+        );
         advice.push("Retest with proxy disabled and enabled outside LANPilot.".to_string());
-        retest.push("Compare HTTPS timing across Apple, developer, CDN, and mainland reference targets.".to_string());
+        retest.push(
+            "Compare HTTPS timing across Apple, developer, CDN, and mainland reference targets."
+                .to_string(),
+        );
     }
 
     if key_evidence.is_empty() {
-        key_evidence.push("DHCP address, gateway, DNS, and external timing do not show a critical condition.".to_string());
-        key_evidence.push(format!("Current path: {}.", network_path_from_evidence(evidence)));
+        key_evidence.push(
+            "DHCP address, gateway, DNS, and external timing do not show a critical condition."
+                .to_string(),
+        );
+        key_evidence.push(format!(
+            "Current path: {}.",
+            network_path_from_evidence(evidence)
+        ));
         advice.push("Save this result as a baseline for future comparison.".to_string());
-        advice.push("If the user experience changes, compare a new snapshot against this baseline.".to_string());
-        retest.push("Run the same check after any proxy, VPN, Wi-Fi, or adapter change.".to_string());
+        advice.push(
+            "If the user experience changes, compare a new snapshot against this baseline."
+                .to_string(),
+        );
+        retest
+            .push("Run the same check after any proxy, VPN, Wi-Fi, or adapter change.".to_string());
     }
 
     if let Some(notice) = string_from_json(evidence, &["physicalLan", "networkPathNotice"]) {
@@ -2122,18 +2483,22 @@ fn build_reliability_summary(evidence: &serde_json::Value) -> serde_json::Value 
 
     if bool_from_json(evidence, &["physicalLan", "iphoneHotspotLikely"]) {
         advice.push("Treat findings as mobile hotspot, hotspot NAT, or carrier-path observations until retested on the fixed LAN.".to_string());
-        retest.push("Retest on the fixed home or office LAN before assigning the fault to the router.".to_string());
+        retest.push(
+            "Retest on the fixed home or office LAN before assigning the fault to the router."
+                .to_string(),
+        );
     }
 
-    let overall_status = if [physical_status, dns_status, overlay_status, external_status].contains(&"critical") {
-        "critical"
-    } else if fault_domain != "none"
-        || [physical_status, dns_status, overlay_status, external_status].contains(&"warning")
-    {
-        "warning"
-    } else {
-        "healthy"
-    };
+    let overall_status =
+        if [physical_status, dns_status, overlay_status, external_status].contains(&"critical") {
+            "critical"
+        } else if fault_domain != "none"
+            || [physical_status, dns_status, overlay_status, external_status].contains(&"warning")
+        {
+            "warning"
+        } else {
+            "healthy"
+        };
 
     serde_json::json!({
         "overallStatus": overall_status,
@@ -2166,16 +2531,30 @@ fn markdown_list(values: Option<&Vec<serde_json::Value>>) -> String {
         .unwrap_or_else(|| "- None".to_string())
 }
 
-fn build_network_reliability_report(summary: &serde_json::Value, evidence: &serde_json::Value) -> String {
+fn build_network_reliability_report(
+    summary: &serde_json::Value,
+    evidence: &serde_json::Value,
+) -> String {
     let summary_items = |key: &str| summary.get(key).and_then(serde_json::Value::as_array);
     let target_lines = external_targets(evidence)
         .iter()
         .map(|target| {
             format!(
                 "- {}: total={} ms, status={}",
-                target.get("url").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
-                target.get("totalMs").and_then(serde_json::Value::as_u64).map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string()),
-                target.get("status").and_then(serde_json::Value::as_u64).map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string())
+                target
+                    .get("url")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown"),
+                target
+                    .get("totalMs")
+                    .and_then(serde_json::Value::as_u64)
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
+                target
+                    .get("status")
+                    .and_then(serde_json::Value::as_u64)
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "unknown".to_string())
             )
         })
         .collect::<Vec<_>>()
@@ -2190,9 +2569,19 @@ fn build_network_reliability_report(summary: &serde_json::Value, evidence: &serd
                 .map(|service| {
                     format!(
                         "- {} {}:{}",
-                        service.get("name").and_then(serde_json::Value::as_str).unwrap_or("Service"),
-                        service.get("bindAddress").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
-                        service.get("port").and_then(serde_json::Value::as_u64).map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string())
+                        service
+                            .get("name")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("Service"),
+                        service
+                            .get("bindAddress")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("unknown"),
+                        service
+                            .get("port")
+                            .and_then(serde_json::Value::as_u64)
+                            .map(|value| value.to_string())
+                            .unwrap_or_else(|| "unknown".to_string())
                     )
                 })
                 .collect::<Vec<_>>()
@@ -2200,11 +2589,13 @@ fn build_network_reliability_report(summary: &serde_json::Value, evidence: &serd
         })
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "- None".to_string());
-    let active_interface = string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "unknown".to_string());
+    let active_interface = string_from_json(evidence, &["physicalLan", "activeInterface"])
+        .unwrap_or_else(|| "unknown".to_string());
     let overlay_interface = string_from_json(evidence, &["overlay", "defaultRouteInterface"])
         .filter(|value| value.starts_with("utun"))
         .unwrap_or_else(|| "none".to_string());
-    let generated_at = string_from_json(evidence, &["generatedAt"]).unwrap_or_else(|| "unknown".to_string());
+    let generated_at =
+        string_from_json(evidence, &["generatedAt"]).unwrap_or_else(|| "unknown".to_string());
 
     format!(
         "# Network Doctor Report\n\n## Run Metadata\n\n- resultMode: real\n- evidenceSource: local-collector\n- lastRunAt: {}\n- selectedInterface: {}\n- physicalInterface: {}\n- overlayInterface: {}\n\n## Overall Diagnosis\n\n{}\n\n## Current Network Path\n\n{}\n\n## Fault Point\n\n{}\n\n## Impact\n\n{}\n\n## Key Evidence\n\n{}\n\n## Root Cause Candidates\n\n- {}: {}\n\n## Evidence Against\n\n- Compare gateway, DNS, overlay, and application timing before assigning ownership.\n\n## Troubleshooting Advice\n\n{}\n\n## Retest Plan\n\n{}\n\n## Physical LAN\n\n- Interface: {}\n- Gateway: {}\n- Gateway latency: {} ms\n\n## DNS\n\n- System DNS: {}\n- Gateway DNS: {} ms\n\n## Overlay / Proxy / VPN\n\n- Default route interface: {}\n- Overlay interfaces: {}\n\n## External Internet\n\n{}\n\n## Local Listening Services\n\n{}\n\n## Raw Evidence\n\n- network-environment-evidence.json\n",
@@ -2236,7 +2627,11 @@ fn build_network_reliability_report(summary: &serde_json::Value, evidence: &serd
 fn build_network_reliability_retest(summary: &serde_json::Value) -> String {
     format!(
         "# Network Reliability Retest Plan\n\n{}\n",
-        markdown_list(summary.get("retestPlan").and_then(serde_json::Value::as_array))
+        markdown_list(
+            summary
+                .get("retestPlan")
+                .and_then(serde_json::Value::as_array)
+        )
     )
 }
 
@@ -2273,11 +2668,15 @@ fn extract_ipv4_candidates(input: &str) -> Vec<String> {
 
 fn extract_mac_candidates(input: &str) -> Vec<String> {
     let mut values = Vec::new();
-    for token in input.split(|character: char| character.is_whitespace() || matches!(character, ',' | ';' | ')' | '(')) {
+    for token in input.split(|character: char| {
+        character.is_whitespace() || matches!(character, ',' | ';' | ')' | '(')
+    }) {
         let candidate = token.trim_matches(|character: char| matches!(character, '"' | '\''));
         let parts = candidate.split(':').collect::<Vec<_>>();
         if parts.len() == 6
-            && parts.iter().all(|part| part.len() == 2 && part.chars().all(|character| character.is_ascii_hexdigit()))
+            && parts.iter().all(|part| {
+                part.len() == 2 && part.chars().all(|character| character.is_ascii_hexdigit())
+            })
         {
             values.push(candidate.to_string());
         }
@@ -2330,7 +2729,9 @@ fn capture_curl_target(url: &str) -> CommandCapture {
     )
 }
 
-fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkReliabilityRun, String> {
+fn collect_network_reliability(
+    mode: NetworkReliabilityMode,
+) -> Result<NetworkReliabilityRun, String> {
     let home = home_path()?;
     let output_directory = latest_lab_path()?.join("08-network-reliability");
     fs::create_dir_all(&output_directory)
@@ -2343,33 +2744,41 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     let route_default = capture_fixed("route-default", "/sbin/route", &["-n", "get", "default"]);
     let default_route_interface = parse_route_field(&route_default.stdout, "interface:");
     let default_route_gateway = parse_route_field(&route_default.stdout, "gateway:");
-    let active_interface = choose_reliability_interface(&ifconfig_list.stdout, default_route_interface.as_deref());
-    let interface_detail = capture_fixed("ifconfig-interface", "/sbin/ifconfig", &[&active_interface]);
-    let ipconfig = capture_fixed("ipconfig-getpacket", "/usr/sbin/ipconfig", &["getpacket", &active_interface]);
+    let active_interface =
+        choose_reliability_interface(&ifconfig_list.stdout, default_route_interface.as_deref());
+    let interface_detail =
+        capture_fixed("ifconfig-interface", "/sbin/ifconfig", &[&active_interface]);
+    let ipconfig = capture_fixed(
+        "ipconfig-getpacket",
+        "/usr/sbin/ipconfig",
+        &["getpacket", &active_interface],
+    );
     let scutil_dns = capture_fixed("scutil-dns", "/usr/sbin/scutil", &["--dns"]);
     let netstat_routes = capture_fixed("netstat-routes", "/usr/sbin/netstat", &["-rn"]);
     let arp_table = capture_fixed("arp-table", "/usr/sbin/arp", &["-an"]);
-    let lsof_listen = capture_fixed("lsof-listen", "/usr/sbin/lsof", &["-nP", "-iTCP", "-sTCP:LISTEN"]);
+    let lsof_listen = capture_fixed(
+        "lsof-listen",
+        "/usr/sbin/lsof",
+        &["-nP", "-iTCP", "-sTCP:LISTEN"],
+    );
     let sw_vers = capture_fixed("sw-vers", "/usr/bin/sw_vers", &[]);
     let gateway = default_route_gateway
         .clone()
         .or_else(|| parse_dhcp_value(&ipconfig.stdout, "router"));
     let gateway_ping_count = mode.gateway_sample_count();
-    let ping_gateway = gateway
-        .as_deref()
-        .map(|gateway_ip| capture_fixed("gateway-ping", "/sbin/ping", &["-c", gateway_ping_count, "-n", gateway_ip]));
+    let ping_gateway = gateway.as_deref().map(|gateway_ip| {
+        capture_fixed(
+            "gateway-ping",
+            "/sbin/ping",
+            &["-c", gateway_ping_count, "-n", gateway_ip],
+        )
+    });
     let gateway_dns_start = Instant::now();
     let gateway_dns = if let Some(gateway_ip) = gateway.as_deref() {
         if let Some(dig) = command_path("dig") {
             let dig_command = dig.display().to_string();
             let resolver = format!("@{gateway_ip}");
-            let dig_args = [
-                resolver.as_str(),
-                "apple.com",
-                "A",
-                "+time=2",
-                "+tries=1",
-            ];
+            let dig_args = [resolver.as_str(), "apple.com", "A", "+time=2", "+tries=1"];
             Some(capture_fixed("gateway-dns", &dig_command, &dig_args))
         } else {
             None
@@ -2377,14 +2786,22 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     } else {
         None
     };
+    let gateway_dns_elapsed_ms = gateway_dns
+        .as_ref()
+        .map(|_| gateway_dns_start.elapsed().as_millis() as u64);
     let gateway_dns_ms = gateway_dns
         .as_ref()
         .filter(|capture| capture.success)
-        .map(|_| gateway_dns_start.elapsed().as_millis() as u64);
+        .and_then(|capture| parse_dig_query_time_ms(&capture.stdout).or(gateway_dns_elapsed_ms));
     let tailscale_status = command_path("tailscale")
         .map(|path| capture_fixed("tailscale-status", &path.display().to_string(), &["status"]));
-    let tailscale_netcheck = command_path("tailscale")
-        .map(|path| capture_fixed("tailscale-netcheck", &path.display().to_string(), &["netcheck"]));
+    let tailscale_netcheck = command_path("tailscale").map(|path| {
+        capture_fixed(
+            "tailscale-netcheck",
+            &path.display().to_string(),
+            &["netcheck"],
+        )
+    });
     let targets = [
         "https://www.apple.com",
         "https://github.com",
@@ -2415,6 +2832,43 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     let dhcp_dns = parse_dhcp_dns(&ipconfig.stdout);
     let system_dns = parse_scutil_dns_servers(&scutil_dns.stdout);
     let scoped_resolvers = parse_scutil_scoped_resolvers(&scutil_dns.stdout);
+    let system_dns_captures = command_path("dig")
+        .map(|path| {
+            let dig_command = path.display().to_string();
+            system_dns
+                .iter()
+                .take(4)
+                .map(|resolver| {
+                    let label = format!("system-dns-{resolver}");
+                    capture_dns_resolver(&label, resolver, "apple.com", &dig_command)
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut resolver_checks = Vec::new();
+    if let (Some(gateway_ip), Some(capture)) = (gateway.as_deref(), gateway_dns.as_ref()) {
+        resolver_checks.push(build_dns_resolver_check(
+            "Gateway DNS",
+            gateway_ip,
+            capture,
+            false,
+            gateway_dns_ms,
+        ));
+    }
+    for (index, (resolver, capture)) in system_dns
+        .iter()
+        .take(4)
+        .zip(system_dns_captures.iter())
+        .enumerate()
+    {
+        resolver_checks.push(build_dns_resolver_check(
+            &format!("System DNS {}", index + 1),
+            resolver,
+            capture,
+            dns_resolver_via_overlay(resolver, default_route_interface.as_deref()),
+            None,
+        ));
+    }
     let utun_interfaces = ifconfig_list
         .stdout
         .split_whitespace()
@@ -2426,18 +2880,38 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     let scutil_lower = scutil_dns.stdout.to_lowercase();
     let tailscale_text = format!(
         "{}\n{}",
-        tailscale_status.as_ref().map(|capture| capture.stdout.as_str()).unwrap_or(""),
-        tailscale_netcheck.as_ref().map(|capture| capture.stdout.as_str()).unwrap_or("")
+        tailscale_status
+            .as_ref()
+            .map(|capture| capture.stdout.as_str())
+            .unwrap_or(""),
+        tailscale_netcheck
+            .as_ref()
+            .map(|capture| capture.stdout.as_str())
+            .unwrap_or("")
     );
     let tailscale_lower = tailscale_text.to_lowercase();
-    let stash_detected = lsof_lower.contains("stash") || lsof_listen.stdout.contains(":7890") || lsof_listen.stdout.contains(":9090");
+    let stash_detected = lsof_lower.contains("stash")
+        || lsof_listen.stdout.contains(":7890")
+        || lsof_listen.stdout.contains(":9090");
     let has_tailscale_dns = system_dns.iter().any(|value| value == "100.100.100.100");
-    let has_tailscale_ipv6_dns = system_dns.iter().any(|value| value.to_lowercase().starts_with("fd7a:115c:a1e0"));
-    let tailscale_running = tailscale_status.as_ref().map(|capture| capture.success && !capture.stdout.trim().is_empty()).unwrap_or(false);
-    let tailscale_exit_node = tailscale_lower.contains("exit node") || (tailscale_running && default_route_interface.as_deref().unwrap_or("").starts_with("utun"));
-    let has_proxy_range = netstat_lower.contains("198.18") || system_dns.iter().any(|value| value.starts_with("198.18."));
+    let has_tailscale_ipv6_dns = system_dns
+        .iter()
+        .any(|value| value.to_lowercase().starts_with("fd7a:115c:a1e0"));
+    let tailscale_running = tailscale_status
+        .as_ref()
+        .map(|capture| capture.success && !capture.stdout.trim().is_empty())
+        .unwrap_or(false);
+    let tailscale_exit_node = tailscale_lower.contains("exit node")
+        || (tailscale_running
+            && default_route_interface
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("utun"));
+    let has_proxy_range = netstat_lower.contains("198.18")
+        || system_dns.iter().any(|value| value.starts_with("198.18."));
     let has_tailscale_range = netstat_lower.contains("100.64") || has_tailscale_dns;
-    let wireguard_detected = netstat_lower.contains("wireguard") || lsof_lower.contains("wireguard");
+    let wireguard_detected =
+        netstat_lower.contains("wireguard") || lsof_lower.contains("wireguard");
     let openvpn_detected = lsof_lower.contains("openvpn");
     let clash_detected = lsof_lower.contains("clash");
     let surge_detected = lsof_lower.contains("surge");
@@ -2452,10 +2926,18 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     .into_iter()
     .filter(|value| *value)
     .count();
-    let dns_via_overlay = has_proxy_range || has_tailscale_dns || has_tailscale_ipv6_dns || scutil_lower.contains("utun");
+    let dns_via_overlay = has_proxy_range
+        || has_tailscale_dns
+        || has_tailscale_ipv6_dns
+        || scutil_lower.contains("utun");
     let profile = if tailscale_exit_node {
         "Tailscale Remote Access"
-    } else if overlay_count > 0 || default_route_interface.as_deref().unwrap_or("").starts_with("utun") {
+    } else if overlay_count > 0
+        || default_route_interface
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("utun")
+    {
         "VPN / Proxy Active"
     } else if iphone_hotspot {
         "Mobile Hotspot"
@@ -2465,7 +2947,12 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     let listening_services = parse_listening_services(&lsof_listen.stdout);
     let external_targets = curl_captures
         .iter()
-        .map(|capture| parse_curl_timing(capture.args.last().map(String::as_str).unwrap_or("unknown"), capture))
+        .map(|capture| {
+            parse_curl_timing(
+                capture.args.last().map(String::as_str).unwrap_or("unknown"),
+                capture,
+            )
+        })
         .collect::<Vec<_>>();
     let stash_ports = [7890, 9090]
         .into_iter()
@@ -2489,6 +2976,7 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
         if let Some(capture) = gateway_dns.clone() {
             values.push(capture);
         }
+        values.extend(system_dns_captures.iter().cloned());
         if let Some(capture) = tailscale_status.clone() {
             values.push(capture);
         }
@@ -2500,14 +2988,16 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     };
     let raw_captures = captures
         .iter()
-        .map(|capture| serde_json::json!({
-            "label": capture.label,
-            "command": capture.command,
-            "args": capture.args,
-            "success": capture.success,
-            "stdout": capture.stdout,
-            "stderr": capture.stderr
-        }))
+        .map(|capture| {
+            serde_json::json!({
+                "label": capture.label,
+                "command": capture.command,
+                "args": capture.args,
+                "success": capture.success,
+                "stdout": capture.stdout,
+                "stderr": capture.stderr
+            })
+        })
         .collect::<Vec<_>>();
     let evidence = serde_json::json!({
         "profile": profile,
@@ -2547,6 +3037,7 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
         "localControlPlane": {
             "systemDnsServers": system_dns,
             "scopedResolvers": scoped_resolvers,
+            "resolverChecks": resolver_checks,
             "resolverSummary": "System resolver snapshot collected locally",
             "mdnsSummary": "mDNS is observed by the main audit workflow when that workflow is run",
             "listeningServices": listening_services
@@ -2598,7 +3089,9 @@ fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkRe
     for (name, content) in &output_files {
         let path = output_directory.join(name);
         if path.exists() && !is_regular_file(&path) {
-            return Err(format!("Reliability output path is not a regular file: {name}"));
+            return Err(format!(
+                "Reliability output path is not a regular file: {name}"
+            ));
         }
         fs::write(&path, content)
             .map_err(|error| format!("Unable to write reliability output {name}: {error}"))?;
@@ -2887,15 +3380,24 @@ mod tests {
 
     #[test]
     fn remediation_pack_writes_only_fixed_structured_artifacts() {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let directory = std::env::temp_dir().join(format!("lanpilot-remediation-test-{unique}"));
         write_remediation_pack(&directory, &sample_remediation_pack("open"))
             .expect("valid remediation pack should be written");
         for name in [
-            "remediation-pack.json", "remediation-tickets.csv", "remediation-playbook.md",
-            "remediation-verification-plan.md", "remediation-acceptance-records.csv",
+            "remediation-pack.json",
+            "remediation-tickets.csv",
+            "remediation-playbook.md",
+            "remediation-verification-plan.md",
+            "remediation-acceptance-records.csv",
         ] {
-            assert!(is_regular_file(&directory.join(name)), "{name} should exist");
+            assert!(
+                is_regular_file(&directory.join(name)),
+                "{name} should exist"
+            );
         }
         assert_eq!(fs::read_dir(&directory).unwrap().count(), 5);
         fs::remove_dir_all(directory).expect("temporary test directory should be removed");
@@ -3004,9 +3506,18 @@ mod tests {
 
     #[test]
     fn network_doctor_mode_accepts_only_fixed_modes() {
-        assert!(matches!(NetworkReliabilityMode::from_option(None), Ok(NetworkReliabilityMode::Quick)));
-        assert!(matches!(NetworkReliabilityMode::from_option(Some("quick".to_string())), Ok(NetworkReliabilityMode::Quick)));
-        assert!(matches!(NetworkReliabilityMode::from_option(Some("deep".to_string())), Ok(NetworkReliabilityMode::Deep)));
+        assert!(matches!(
+            NetworkReliabilityMode::from_option(None),
+            Ok(NetworkReliabilityMode::Quick)
+        ));
+        assert!(matches!(
+            NetworkReliabilityMode::from_option(Some("quick".to_string())),
+            Ok(NetworkReliabilityMode::Quick)
+        ));
+        assert!(matches!(
+            NetworkReliabilityMode::from_option(Some("deep".to_string())),
+            Ok(NetworkReliabilityMode::Deep)
+        ));
         assert!(NetworkReliabilityMode::from_option(Some("other".to_string())).is_err());
         assert_eq!(NetworkReliabilityMode::Quick.gateway_sample_count(), "16");
         assert_eq!(NetworkReliabilityMode::Deep.gateway_sample_count(), "120");
@@ -3030,9 +3541,18 @@ mod tests {
 
     #[test]
     fn reliability_labels_hotspot_and_self_assigned_paths() {
-        assert_eq!(reliability_interface_kind("en6", Some("172.20.10.7")), "iphone_usb");
-        assert_eq!(reliability_interface_kind("en0", Some("192.168.50.20")), "wifi");
-        assert_eq!(reliability_interface_kind("en5", Some("192.168.50.21")), "wired");
+        assert_eq!(
+            reliability_interface_kind("en6", Some("172.20.10.7")),
+            "iphone_usb"
+        );
+        assert_eq!(
+            reliability_interface_kind("en0", Some("192.168.50.20")),
+            "wifi"
+        );
+        assert_eq!(
+            reliability_interface_kind("en5", Some("192.168.50.21")),
+            "wired"
+        );
 
         let hotspot = reliability_path_notice(Some("172.20.10.7")).unwrap_or_default();
         let self_assigned = reliability_path_notice(Some("169.254.10.20")).unwrap_or_default();
@@ -3041,6 +3561,47 @@ mod tests {
         assert!(hotspot.contains("carrier routing"));
         assert!(self_assigned.contains("self-assigned 169.254.x.x"));
         assert!(self_assigned.contains("DHCP"));
+    }
+
+    #[test]
+    fn reliability_dns_status_uses_structured_resolver_checks() {
+        let evidence = serde_json::json!({
+            "physicalLan": {
+                "dhcpOk": true,
+                "ipv4": "192.168.50.20",
+                "gatewayIp": "192.168.50.1",
+                "gatewayDnsTimedOut": false
+            },
+            "localControlPlane": {
+                "systemDnsServers": ["192.168.50.1"],
+                "resolverChecks": [
+                    { "name": "Gateway DNS", "address": "192.168.50.1", "queryStatus": "ok", "responseMs": 220, "resolvedIp": "17.253.144.10", "viaOverlay": false }
+                ]
+            },
+            "overlay": {
+                "dnsViaOverlay": false,
+                "hasTailscaleDns100100": false,
+                "hasTailscaleIpv6Dns": false
+            },
+            "external": {
+                "targets": []
+            }
+        });
+        assert_eq!(dns_status_from_evidence(&evidence), "warning");
+    }
+
+    #[test]
+    fn reliability_dns_helpers_parse_dig_output() {
+        let output =
+            ";; ANSWER SECTION:\napple.com. 60 IN A 17.253.144.10\n\n;; Query time: 37 msec\n";
+        assert_eq!(parse_dig_query_time_ms(output), Some(37));
+        assert_eq!(
+            parse_dig_answer_ipv4(output),
+            Some("17.253.144.10".to_string())
+        );
+        assert!(dns_resolver_via_overlay("100.100.100.100", Some("en0")));
+        assert!(dns_resolver_via_overlay("192.168.50.1", Some("utun15")));
+        assert!(!dns_resolver_via_overlay("192.168.50.1", Some("en0")));
     }
 
     #[test]
