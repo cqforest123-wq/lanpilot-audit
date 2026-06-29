@@ -417,7 +417,10 @@ describe("localized report view", () => {
     await user.click(screen.getByRole("button", { name: "报告" }));
     await screen.findByText("管理摘要");
     expect(screen.getByText("管理摘要")).toBeVisible();
-    expect(screen.getByText(/raw internal evidence/i)).toBeVisible();
+
+    await user.click(screen.getByRole("tab", { name: "原始证据" }));
+    expect(screen.getByText(/This report summarizes authorized network governance observations/)).toBeVisible();
+    expect(screen.getByText("原始证据按生成时的原文保留。")).toBeVisible();
   });
 });
 
