@@ -1,0 +1,9 @@
+{
+  "profile": "Gateway packet loss",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "gateway",
+  "observations": {
+    "gateway": { "sampleCount": 18, "avgMs": 85, "minMs": 2, "maxMs": 180, "stddevMs": 34, "jitterMs": 38, "lossPct": 12 }
+  }
+}

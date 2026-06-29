@@ -242,6 +242,36 @@ struct NetworkReliabilityRun {
     output_directory: String,
 }
 
+#[derive(Clone, Copy)]
+enum NetworkReliabilityMode {
+    Quick,
+    Deep,
+}
+
+impl NetworkReliabilityMode {
+    fn from_option(value: Option<String>) -> Result<Self, String> {
+        match value.as_deref().unwrap_or("quick") {
+            "quick" => Ok(Self::Quick),
+            "deep" => Ok(Self::Deep),
+            _ => Err("Unsupported Network Doctor mode.".to_string()),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Quick => "quick",
+            Self::Deep => "deep",
+        }
+    }
+
+    fn gateway_sample_count(self) -> &'static str {
+        match self {
+            Self::Quick => "16",
+            Self::Deep => "120",
+        }
+    }
+}
+
 #[derive(Clone)]
 struct CommandCapture {
     label: String,
@@ -2174,7 +2204,7 @@ fn capture_curl_target(url: &str) -> CommandCapture {
     )
 }
 
-fn collect_network_reliability() -> Result<NetworkReliabilityRun, String> {
+fn collect_network_reliability(mode: NetworkReliabilityMode) -> Result<NetworkReliabilityRun, String> {
     let home = home_path()?;
     let output_directory = latest_lab_path()?.join("08-network-reliability");
     fs::create_dir_all(&output_directory)
@@ -2198,9 +2228,10 @@ fn collect_network_reliability() -> Result<NetworkReliabilityRun, String> {
     let gateway = default_route_gateway
         .clone()
         .or_else(|| parse_dhcp_value(&ipconfig.stdout, "router"));
+    let gateway_ping_count = mode.gateway_sample_count();
     let ping_gateway = gateway
         .as_deref()
-        .map(|gateway_ip| capture_fixed("gateway-ping", "/sbin/ping", &["-c", "3", "-n", "-q", gateway_ip]));
+        .map(|gateway_ip| capture_fixed("gateway-ping", "/sbin/ping", &["-c", gateway_ping_count, "-n", "-q", gateway_ip]));
     let gateway_dns_start = Instant::now();
     let gateway_dns = if let Some(gateway_ip) = gateway.as_deref() {
         if let Some(dig) = command_path("dig") {
@@ -2345,6 +2376,7 @@ fn collect_network_reliability() -> Result<NetworkReliabilityRun, String> {
         .collect::<Vec<_>>();
     let evidence = serde_json::json!({
         "profile": profile,
+        "mode": mode.as_str(),
         "generatedAt": chrono::Local::now().to_rfc3339(),
         "physicalLan": {
             "activeInterface": active_interface.clone(),
@@ -2361,6 +2393,7 @@ fn collect_network_reliability() -> Result<NetworkReliabilityRun, String> {
             "gatewayPingLossPct": json_number(gateway_loss),
             "gatewayPingAvgMs": json_number(gateway_avg),
             "gatewayPingJitterMs": json_number(gateway_jitter),
+            "gatewayPingSampleCount": gateway_ping_count.parse::<u64>().unwrap_or(0),
             "gatewayDnsMs": json_u64(gateway_dns_ms),
             "gatewayDnsTimedOut": gateway_dns.as_ref().map(|capture| !capture.success).unwrap_or(false),
             "arpSummary": format!("{} ARP neighbor rows observed", arp_table.stdout.lines().filter(|line| !line.trim().is_empty()).count()),
@@ -2439,11 +2472,13 @@ fn collect_network_reliability() -> Result<NetworkReliabilityRun, String> {
 
 #[tauri::command]
 async fn run_network_reliability_check(
+    mode: Option<String>,
     execution_state: tauri::State<'_, AuditExecutionState>,
 ) -> Result<NetworkReliabilityRun, String> {
     execution_state.consume_authorization()?;
     let _guard = execution_state.try_start()?;
-    tauri::async_runtime::spawn_blocking(collect_network_reliability)
+    let mode = NetworkReliabilityMode::from_option(mode)?;
+    tauri::async_runtime::spawn_blocking(move || collect_network_reliability(mode))
         .await
         .map_err(|error| format!("Network reliability worker failed: {error}"))?
 }
@@ -2821,6 +2856,16 @@ mod tests {
     #[test]
     fn reliability_artifact_opener_rejects_unknown_kind() {
         assert!(open_network_reliability_artifact("freeform".to_string()).is_err());
+    }
+
+    #[test]
+    fn network_doctor_mode_accepts_only_fixed_modes() {
+        assert!(matches!(NetworkReliabilityMode::from_option(None), Ok(NetworkReliabilityMode::Quick)));
+        assert!(matches!(NetworkReliabilityMode::from_option(Some("quick".to_string())), Ok(NetworkReliabilityMode::Quick)));
+        assert!(matches!(NetworkReliabilityMode::from_option(Some("deep".to_string())), Ok(NetworkReliabilityMode::Deep)));
+        assert!(NetworkReliabilityMode::from_option(Some("other".to_string())).is_err());
+        assert_eq!(NetworkReliabilityMode::Quick.gateway_sample_count(), "16");
+        assert_eq!(NetworkReliabilityMode::Deep.gateway_sample_count(), "120");
     }
 
     #[test]

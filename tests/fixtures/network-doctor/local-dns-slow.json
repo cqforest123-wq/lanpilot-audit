@@ -1,0 +1,14 @@
+{
+  "profile": "Local DNS slow",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "local_dns",
+  "observations": {
+    "dns": {
+      "resolverChecks": [
+        { "name": "Gateway DNS", "address": "192.0.2.1", "icmpReachable": true, "queryStatus": "ok", "responseMs": 680, "resolvedIp": "203.0.113.10", "viaOverlay": false },
+        { "name": "Cloudflare", "address": "1.1.1.1", "icmpReachable": true, "queryStatus": "ok", "responseMs": 32, "resolvedIp": "203.0.113.10", "viaOverlay": false }
+      ]
+    }
+  }
+}

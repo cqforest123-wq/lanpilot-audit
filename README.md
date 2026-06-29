@@ -1,6 +1,6 @@
 # LANPilot Audit
 
-LANPilot Audit -- Local-first LAN governance audit assistant for macOS. Developer ID signed and Apple notarized DMG available in Releases.
+LANPilot Audit -- Local-first Network Doctor and LAN governance assistant for macOS. Developer ID signed and Apple notarized DMG available in Releases.
 
 [![Release](https://img.shields.io/github/v/release/cqforest123-wq/lanpilot-audit?include_prereleases)](https://github.com/cqforest123-wq/lanpilot-audit/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/cqforest123-wq/lanpilot-audit/ci.yml?branch=main&label=CI)](https://github.com/cqforest123-wq/lanpilot-audit/actions)
@@ -12,11 +12,15 @@ LANPilot Audit -- Local-first LAN governance audit assistant for macOS. Develope
 ![Local First](https://img.shields.io/badge/local--first-no%20cloud%20upload-brightgreen)
 ![Notarized DMG](https://img.shields.io/badge/DMG-signed%20%2B%20notarized-success)
 
-LANPilot Audit helps small teams understand LAN exposure without turning an audit tool into an offensive scanner. It runs a fixed, authorized, low-intensity local workflow and turns observations into assets, risk registers, remediation plans, evidence, and retest records.
+LANPilot Audit turns network troubleshooting experience into repeatable, explainable, and retestable local diagnostics. Network Doctor checks the Mac, physical LAN, gateway, DNS, route, overlay/proxy/VPN, TLS, and application path from inside to outside, then ranks likely root causes with evidence, confidence, recommended actions, and a retest plan.
 
 ## Visual Preview
 
 Screenshots use synthetic demo data from [docs/assets/demo-data](docs/assets/demo-data/public-demo-audit.json). They do not include production network information.
+
+| Modern dashboard | Network path map | Latency diagnostics | Chinese troubleshooting |
+| --- | --- | --- | --- |
+| ![Modern dashboard with synthetic network data](docs/assets/dashboard-overview.png) | ![Network path map with synthetic Stash TUN data](docs/assets/network-path-map.png) | ![Latency diagnostics with synthetic timing data](docs/assets/latency-diagnostics.png) | ![Chinese troubleshooting advice with synthetic data](docs/assets/troubleshooting-advice-zh.png) |
 
 | Authorization workflow | Chinese report view | Remediation workflow |
 | --- | --- | --- |
@@ -36,7 +40,7 @@ You can also use `npm run app:dev` for the local Tauri development run.
 
 ## Why
 
-Small networks often expose SMB, remote admin, web panels, gateway services, and client-to-client access without a clear owner or remediation path. LANPilot turns low-intensity observations into risk registers, remediation plans, and retest workflows that are useful for small-business governance.
+Small teams often lose hours separating Wi-Fi, DHCP, DNS, proxy/VPN, TLS, and application symptoms. LANPilot Network Doctor provides a fixed diagnostic graph and root-cause ranking before moving into the broader governance workflow for assets, exposure, remediation, and retest records.
 
 ## Safety Boundary
 
@@ -53,6 +57,15 @@ Small networks often expose SMB, remote admin, web panels, gateway services, and
 
 ## Features
 
+- Network Doctor with Quick Check and Deep Diagnosis modes.
+- Diagnostic domains for local host, physical interface, Wi-Fi, DHCP, gateway, DNS, route, overlay/proxy/VPN, TCP, UDP/QUIC, TLS, external path, application endpoint, router health, and unknown cases.
+- Diagnosis graph with nodes, edges, status, metrics, evidence, and confidence.
+- Root-cause candidates with probability, confidence, supporting evidence, counter-evidence, recommended actions, and retest plan.
+- Health scores for Physical LAN, Wi-Fi, Gateway, DNS, Overlay / Proxy, External Path, and Application Access.
+- Modern dashboard for network path, DNS, overlay, fault point, and troubleshooting advice.
+- Network Path Map for physical, Stash TUN, and Tailscale Exit Node scenarios.
+- Latency visualization for gateway, DNS, TCP, TLS, TTFB, and HTTPS total timing.
+- Network Interface Selector that keeps physical and overlay interfaces distinct.
 - Authorized audit workflow with explicit scope confirmation.
 - Local-first engine and local report storage.
 - Asset inventory and service exposure matrix.
@@ -62,6 +75,7 @@ Small networks often expose SMB, remote admin, web panels, gateway services, and
 - Snapshot comparison across local audit runs.
 - Remediation Assistant with fixed local artifacts and authorized retest entry.
 - Multilingual UI for 11 locales.
+- zh-CN UI completeness checks for visible product copy.
 - Raw Evidence preservation for audit traceability.
 - Export ZIP, HTML, Markdown, CSV, and JSON outputs.
 - Developer ID signed and Apple notarized DMG release path.

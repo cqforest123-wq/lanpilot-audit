@@ -1,0 +1,9 @@
+{
+  "profile": "Router memory pressure",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "router_health",
+  "observations": {
+    "routerHealth": { "enabled": true, "profile": "asuswrt_merlin", "cpuLoad": 1.8, "cpuCores": 4, "memoryUsedPct": 95, "storageUsedPct": 52, "conntrackUsedPct": 61, "wanState": "up", "evidence": ["Memory pressure is high while WAN state remains up."] }
+  }
+}

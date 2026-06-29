@@ -1,0 +1,8 @@
+{
+  "profile": "Router healthy",
+  "mode": "quick",
+  "abnormal": false,
+  "observations": {
+    "routerHealth": { "enabled": true, "profile": "openwrt", "cpuLoad": 0.35, "cpuCores": 4, "memoryUsedPct": 42, "storageUsedPct": 38, "conntrackUsedPct": 18, "wanState": "up", "evidence": ["Read-only router health sample is within expected range."] }
+  }
+}

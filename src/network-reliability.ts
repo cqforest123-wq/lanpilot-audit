@@ -28,6 +28,7 @@ export interface PhysicalLanEvidence {
   gatewayPingLossPct?: number | null;
   gatewayPingAvgMs?: number | null;
   gatewayPingJitterMs?: number | null;
+  gatewayPingSampleCount?: number | null;
   gatewayDnsMs?: number | null;
   gatewayDnsTimedOut?: boolean;
   arpSummary?: string;

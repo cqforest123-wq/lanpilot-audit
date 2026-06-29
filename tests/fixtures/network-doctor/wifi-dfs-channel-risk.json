@@ -1,0 +1,12 @@
+{
+  "profile": "Wi-Fi DFS channel risk",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "wifi_radio",
+  "observations": {
+    "physicalInterface": { "name": "en0", "kind": "wifi", "ipv4": "192.0.2.32" },
+    "wifi": { "active": true, "ssid": "Demo Wi-Fi", "rssiDbm": -58, "noiseDbm": -93, "snrDb": 35, "channel": 100, "band": "5GHz", "channelWidthMhz": 80, "dfsChannel": true },
+    "gateway": { "sampleCount": 18, "avgMs": 5, "jitterMs": 2, "lossPct": 0 },
+    "route": { "defaultInterface": "en0", "physicalInterface": "en0", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": false }
+  }
+}

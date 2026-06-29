@@ -1,0 +1,17 @@
+{
+  "profile": "TLS handshake failed",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "tls",
+  "observations": {
+    "transport": [
+      { "name": "Demo TLS endpoint", "protocol": "tcp", "host": "tls.example.test", "port": 443, "state": "reachable", "latencyMs": 80 }
+    ],
+    "tls": [
+      { "name": "Demo TLS endpoint", "host": "tls.example.test", "state": "handshake_failed", "handshakeMs": null, "expiresInDays": null, "protocolVersion": null }
+    ],
+    "applications": [
+      { "group": "Business", "url": "https://tls.example.test", "state": "tls_failed", "dnsMs": 16, "tcpMs": 80, "tlsMs": null, "ttfbMs": null, "totalMs": null, "status": null, "remoteIp": "203.0.113.45" }
+    ]
+  }
+}

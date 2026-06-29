@@ -1,0 +1,22 @@
+{
+  "scenario": "tailscale_exit_node_slow",
+  "networkPath": "Mac -> en0 -> Tailscale utun8 -> Exit Node -> Internet",
+  "interface": "en0",
+  "localIp": "198.51.100.24",
+  "gateway": "198.51.100.1",
+  "gatewayLatencyMs": 8,
+  "gatewayLossPct": 0,
+  "systemDns": [
+    "100.100.100.100"
+  ],
+  "defaultRoute": "utun8",
+  "tailscale": "exit_node_active",
+  "publicIp": "203.0.113.88",
+  "httpsTotalMs": 5200,
+  "faultPoint": "Tailscale Exit Node may be slowing external connectivity.",
+  "advice": [
+    "Disable Exit Node outside LANPilot and retest",
+    "Review Tailscale DNS",
+    "Compare direct local path and exit-node path"
+  ]
+}

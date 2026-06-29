@@ -14,7 +14,7 @@
 - [ ] Mount the generated DMG and verify its displayed version.
 - [ ] Drag LANPilot Audit into Applications.
 - [ ] Launch the app for the first time and record any macOS security warning.
-- [ ] Confirm Settings displays version 1.6.0 and the actual bundled engine version.
+- [ ] Confirm Settings displays version 1.7.0 and the actual bundled engine version.
 
 ## Overnight Full Acceptance
 

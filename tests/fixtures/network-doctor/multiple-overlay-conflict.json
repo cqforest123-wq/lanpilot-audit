@@ -1,0 +1,13 @@
+{
+  "profile": "Multiple overlay conflict",
+  "mode": "quick",
+  "abnormal": true,
+  "expectedPrimaryFaultDomain": "overlay_proxy",
+  "observations": {
+    "route": { "defaultInterface": "utun15", "physicalInterface": "en5", "physicalGateway": "192.0.2.1", "defaultUsesOverlay": true },
+    "overlays": [
+      { "interface": "utun15", "ownerType": "proxy", "ownerName": "Stash", "confidence": 0.9, "evidence": ["198.18.0.1 address"], "controlsDefaultRoute": true, "controlsDns": true, "healthy": true },
+      { "interface": "utun8", "ownerType": "tailscale", "ownerName": "Tailscale", "confidence": 0.86, "evidence": ["100.100.100.100 resolver observed"], "controlsDefaultRoute": false, "controlsDns": true, "healthy": true }
+    ]
+  }
+}

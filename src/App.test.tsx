@@ -49,6 +49,10 @@ afterEach(() => {
   localStorage.clear();
 });
 
+async function startGovernanceAudit(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getAllByRole("button", { name: "Run Governance Audit" })[0]);
+}
+
 describe("audit authorization and failure flow", () => {
   it("stops after a failed step and requires fresh authorization before retry", async () => {
     const invokedSteps: string[] = [];
@@ -79,7 +83,7 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Start Authorized Audit" }));
+    await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
 
     const continueButton = screen.getByRole("button", { name: "Confirm Authorization" });
@@ -157,7 +161,7 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Start Authorized Audit" }));
+    await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
     await user.type(screen.getByLabelText(/Project name/), "Test audit");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
@@ -208,9 +212,10 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
 
-  it("runs the fixed Network Reliability check only after local authorization", async () => {
+  it("runs the fixed Network Doctor Quick Check only after local authorization", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "authorize_audit") return Promise.resolve();
+      if (command === "list_audit_interfaces") return Promise.resolve([{ name: "en0", ipv4: "192.0.2.20" }, { name: "utun15", ipv4: "198.18.0.1" }]);
       if (command === "run_network_reliability_check") return Promise.resolve(networkReliabilityFixture);
       if (command === "open_network_reliability_artifact") return Promise.resolve();
       return Promise.resolve(engineStatus);
@@ -218,14 +223,13 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Reliability" }));
-    await user.type(screen.getByLabelText(/Project name/), "Reliability check");
-    for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
-    await user.click(screen.getByRole("button", { name: "Run Network Check" }));
+    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Run Quick Check" }));
 
-    expect(await screen.findByText("Current network path")).toBeVisible();
-    expect(screen.getAllByText("Mac -> en0 -> 192.0.2.1 -> ISP -> Internet").length).toBeGreaterThan(0);
-    expect(invokeMock).toHaveBeenCalledWith("run_network_reliability_check");
+    expect(await screen.findByText("Network path view")).toBeVisible();
+    expect(screen.getAllByText("Gateway").length).toBeGreaterThan(0);
+    expect(invokeMock).toHaveBeenCalledWith("run_network_reliability_check", { mode: "quick" });
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
 });
@@ -236,10 +240,10 @@ describe("localization", () => {
   });
 
   it.each([
-    ["zh-CN", "一次授权流程"],
-    ["zh-TW", "一次授權流程"],
-    ["ja", "承認された一つの流れ"],
-    ["ko", "승인된 하나의 흐름"],
+    ["zh-CN", "本地优先"],
+    ["zh-TW", "本地優先"],
+    ["ja", "ローカル優先"],
+    ["ko", "로컬 우선"],
   ])("switches the landing title for %s", async (locale, expected) => {
     localStorage.setItem("lanpilot.locale", locale);
     render(<I18nProvider><App /></I18nProvider>);
@@ -250,7 +254,7 @@ describe("localization", () => {
     invokeMock.mockResolvedValue(engineStatus);
     const user = userEvent.setup();
     render(<I18nProvider><App /></I18nProvider>);
-    await user.click(screen.getByRole("button", { name: "Start Authorized Audit" }));
+    await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
     await user.type(screen.getByLabelText(/Project name/), "Persistent project");
     await user.click(screen.getAllByRole("checkbox")[0]);
@@ -267,7 +271,7 @@ describe("localization", () => {
     });
     const user = userEvent.setup();
     render(<I18nProvider><App /></I18nProvider>);
-    await user.click(screen.getByRole("button", { name: "Report" }));
+    await user.click(screen.getByRole("button", { name: "Reports" }));
     expect(await screen.findByText(/06-report\/executive-summary.md/)).toBeVisible();
     expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
@@ -393,14 +397,14 @@ describe("full guided workflow localization", () => {
     const user = userEvent.setup();
     render(<I18nProvider><App /></I18nProvider>);
 
-    await user.click(screen.getByRole("button", { name: "开始授权审计" }));
-    await screen.findByText("本地引擎就绪状态");
+    await user.click(screen.getAllByRole("button", { name: "运行治理审计" })[0]);
+    await screen.findByText("本地引擎状态");
     const authorizationText = screen.getByRole("region", { name: "LANPilot Audit" }).textContent ?? "";
     for (const forbidden of ["Required before every real audit", "Local engine readiness", "Engine: Ready", "Approved scripts", "I am authorized", "I understand", "Review Authorization"]) {
       expect(authorizationText).not.toContain(forbidden);
     }
     expect(authorizationText).toContain("nmap");
-    expect(authorizationText).toContain("所选本地 IPv4 审计接口");
+    expect(authorizationText).toContain("当前选定的网络接口");
 
     await user.type(screen.getByLabelText(/项目名称/), "本地化测试");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
@@ -421,7 +425,7 @@ describe("full guided workflow localization", () => {
     invokeMock.mockResolvedValue(engineStatus);
     const user = userEvent.setup();
     render(<I18nProvider><App /></I18nProvider>);
-    await user.click(screen.getByRole("button", { name: locale === "ja" ? "承認済み監査を開始" : "승인 감사 시작" }));
+    await user.click(screen.getAllByRole("button", { name: locale === "ja" ? "ガバナンス監査を実行" : "거버넌스 감사 실행" })[0]);
     expect(await screen.findByText(authorizationHeading)).toBeVisible();
     await user.type(screen.getByLabelText(locale === "ja" ? /プロジェクト名/ : /프로젝트 이름/), "test");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
