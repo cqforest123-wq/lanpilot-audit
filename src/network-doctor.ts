@@ -83,6 +83,10 @@ export interface DoctorGatewayObservation {
   maxMs?: number | null;
   stddevMs?: number | null;
   jitterMs?: number | null;
+  p50Ms?: number | null;
+  p95Ms?: number | null;
+  p99Ms?: number | null;
+  samplesMs?: number[];
   lossPct?: number | null;
   arpChanged?: boolean;
 }

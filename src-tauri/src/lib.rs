@@ -1883,7 +1883,7 @@ fn dig_query_status(capture: &CommandCapture) -> &'static str {
     if capture.success {
         "ok"
     } else if combined.contains("timed out") || combined.contains("no servers could be reached") {
-        "timed_out"
+        "timeout"
     } else {
         "failed"
     }
