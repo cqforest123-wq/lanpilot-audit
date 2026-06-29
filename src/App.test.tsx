@@ -408,8 +408,11 @@ describe("localized report view", () => {
   });
 
   it("keeps the localized report in Chinese while raw evidence remains unchanged", async () => {
+    localStorage.setItem("lanpilot.locale", "en");
+    invokeMock.mockResolvedValue(localizedReportFixture);
     const user = userEvent.setup();
-    renderApp("en");
+    render(<I18nProvider><App /></I18nProvider>);
+
     await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-CN");
     await user.click(screen.getByRole("button", { name: "报告" }));
     await screen.findByText("管理摘要");
