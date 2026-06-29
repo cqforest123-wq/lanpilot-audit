@@ -27,7 +27,7 @@ export type DiagnosticDomain =
   | "unknown";
 export type OsiLayer = "L1" | "L2" | "L3" | "L4" | "L5-L6" | "L7";
 export type DoctorConfidence = "High" | "Medium" | "Low";
-export type DoctorScoreState = "Excellent" | "Healthy" | "Degraded" | "Poor" | "Critical";
+export type DoctorScoreState = "Excellent" | "Healthy" | "Acceptable" | "Warning" | "Critical";
 export type TransportState = "reachable" | "refused" | "timeout" | "tls_failed" | "certificate_invalid" | "application_error" | "inconclusive";
 
 export interface DoctorModeProfile {
@@ -332,7 +332,7 @@ const domainLayerMap: Record<DiagnosticDomain, OsiLayer[]> = {
   external_path: ["L3", "L4"],
   application_endpoint: ["L7"],
   router_health: ["L3"],
-  unknown: ["L7"],
+  unknown: [],
 };
 
 const defaultEvidence: CompleteNetworkDoctorEvidence = {
@@ -616,7 +616,7 @@ function evaluateDomains(evidence: CompleteNetworkDoctorEvidence): DomainStatus[
   const wifi = observations.wifi;
   const dnsChecks = observations.dns.resolverChecks;
   const queryFailures = dnsChecks.filter((check) => check.queryStatus === "timeout" || check.queryStatus === "failed");
-  const slowDns = dnsChecks.filter((check) => check.queryStatus === "ok" && (check.responseMs ?? 0) > 300);
+  const slowDns = dnsChecks.filter((check) => check.queryStatus === "ok" && (check.responseMs ?? 0) >= 200);
   const overlays = observations.overlays;
   const overlayConflict = overlays.filter((item) => item.controlsDefaultRoute || item.controlsDns).length > 1;
   const applicationSlow = observations.applications.some((item) => (item.totalMs ?? 0) > 3000 || (item.ttfbMs ?? 0) > 2000);
@@ -740,7 +740,7 @@ function buildCandidate(
     external_path: "External ISP, CDN, or remote path degradation",
     application_endpoint: "Application endpoint is slow or returning errors",
     router_health: "Router resource pressure may affect forwarding",
-    unknown: "No single root cause has enough evidence yet",
+    unknown: "No clear fault detected",
   };
   return {
     rank: 0,
@@ -749,7 +749,7 @@ function buildCandidate(
     probability,
     confidence,
     impact,
-    evidenceFor: status?.evidence.length ? status.evidence : ["The diagnosis graph contains partial evidence for this domain."],
+    evidenceFor: status?.evidence.length ? status.evidence : [],
     evidenceAgainst: evidenceAgainst(domain, evidence, physicalHealthy),
     remediationAdvice: adviceForDomain(domain),
     retestPlan: retestForDomain(domain),
@@ -984,9 +984,9 @@ function adviceForDomain(domain: DiagnosticDomain): DoctorAdvice[] {
     transport_udp: [["Treat UDP and QUIC results as inconclusive unless a known endpoint is configured.", "A silent UDP response is not enough evidence.", "No system setting should be changed from this result alone.", "The report avoids over-claiming.", "Retest with a known endpoint if available." ]],
     tls: [["Inspect certificate and TLS policy for the endpoint.", "TLS failed after transport evidence was collected.", genericRisk, "Handshake and certificate checks pass.", "Retest TLS and HTTPS for the same hostname."], ["Compare direct and overlay TLS results.", "TLS can fail through one path while TCP remains reachable.", genericRisk, "Path-specific TLS behavior is identified.", "Run Deep Diagnosis with the same endpoint group." ]],
     external_path: [["Compare direct, system, and overlay paths outside LANPilot.", "The LAN appears healthier than the external path.", genericRisk, "The slower path is isolated.", "Run Quick Check after each network mode change."], ["Check ISP, CDN region, or remote service status.", "External timing can degrade without a local gateway fault.", "No local router change should be made from this alone.", "The likely external dependency is identified.", "Run Deep Diagnosis and compare endpoint groups." ]],
-    application_endpoint: [["Check the application endpoint group outside LANPilot.", "Application timing or HTTP state is abnormal.", genericRisk, "The endpoint becomes reachable within the expected timing window.", "Retest DNS, TCP, TLS, TTFB, and total timing."], ["Compare another fixed endpoint group.", "A single application status does not prove the entire L7 path.", genericRisk, "Endpoint-specific and path-wide symptoms are separated.", "Run Deep Diagnosis across endpoint groups." ]],
+    application_endpoint: [["Check the application endpoint group outside LANPilot.", "Application timing or HTTP state is abnormal.", genericRisk, "The endpoint becomes reachable within the expected timing window.", "Retest DNS, TCP, TLS, TTFB, and total timing."], ["Compare another fixed endpoint group.", "A single application status does not prove the entire application path.", genericRisk, "Endpoint-specific and path-wide symptoms are separated.", "Run Deep Diagnosis across endpoint groups." ]],
     router_health: [["Review router resource pressure through the optional read-only connector.", "Router evidence indicates memory, connection table, or WAN state pressure.", "Router UI changes should be made deliberately outside LANPilot.", "Forwarding health returns to expected levels.", "Run Router Read-only Check and then Quick Check."], ["Correlate router evidence with gateway timing.", "Load alone should not be treated as a fault without timing or state evidence.", genericRisk, "Router conclusions stay evidence-based.", "Retest after a steady observation interval." ]],
-    unknown: [["Collect a Deep Diagnosis sample.", "Current evidence is insufficient for a high-confidence root cause.", "The check takes longer than Quick Check.", "More samples improve confidence.", "Run Deep Diagnosis and compare candidate probabilities."], ["Save the current result as a baseline.", "A healthy or ambiguous run can still help future comparisons.", "Baseline labels must describe the network state.", "Future route, DNS, and latency changes are easier to explain.", "Compare the next run against this snapshot." ]],
+    unknown: [["doctorAdvice.deepSample.action", "doctorAdvice.deepSample.reason", "doctorAdvice.deepSample.risk", "doctorAdvice.deepSample.expected", "doctorAdvice.deepSample.verify"], ["doctorAdvice.saveBaseline.action", "doctorAdvice.saveBaseline.reason", "doctorAdvice.saveBaseline.risk", "doctorAdvice.saveBaseline.expected", "doctorAdvice.saveBaseline.verify" ]],
   };
   const rows = pairs[domain] ?? pairs.unknown;
   return rows.map(([action, reason, risk, expectedResult, verification]) => ({ action, reason, risk, expectedResult, verification }));
@@ -1020,8 +1020,8 @@ function scoreWeight(name: DoctorScorecard["name"]): number {
 export function scoreState(score: number): DoctorScoreState {
   if (score >= 90) return "Excellent";
   if (score >= 75) return "Healthy";
-  if (score >= 60) return "Degraded";
-  if (score >= 40) return "Poor";
+  if (score >= 60) return "Acceptable";
+  if (score >= 40) return "Warning";
   return "Critical";
 }
 

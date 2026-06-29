@@ -5,7 +5,7 @@ import { supportedLocales, useI18n } from "./i18n";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
-import type { NetworkReliabilityDiagnosis, NetworkReliabilityEvidence, ReliabilityStatus } from "./network-reliability";
+import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkReliabilityEvidence, type ReliabilityStatus } from "./network-reliability";
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
 import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
 import packageJson from "../package.json";
@@ -126,6 +126,8 @@ interface NetworkReliabilityRun {
   outputDirectory: string;
   doctorMode?: DoctorMode;
 }
+
+type NetworkDoctorResultMode = "empty" | "demo" | "real" | "failed";
 
 interface AuditStep {
   id: AuditStepId;
@@ -295,7 +297,7 @@ function OverviewPage({
             <span className="eyebrow">{t("overview.currentPath")}</span>
             <StatusBadge status={summary.overallStatus} label={t(`reliability.status.${summary.overallStatus}`)} />
           </div>
-          <NetworkPathMap summary={summary} evidence={evidence} />
+          <NetworkPathMap summary={summary} evidence={evidence} resultMode={demo ? "demo" : "real"} />
           <div className="actions">
             <button className="primary" type="button" onClick={onNetworkCheck}>{t("button.startNetworkCheck")}</button>
             <button className="secondary" type="button" onClick={onGovernanceAudit}>{t("button.runGovernanceAudit")}</button>
@@ -366,13 +368,15 @@ function Checklist({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-type PathNode = { label: string; detail?: string; status: ReliabilityStatus };
+type PathNode = { label: string; detail?: string; status: ReliabilityStatus; source: string };
 
-function NetworkPathMap({ summary, evidence }: { summary: NetworkReliabilityDiagnosis; evidence: NetworkReliabilityEvidence }) {
+function NetworkPathMap({ summary, evidence, resultMode }: { summary: NetworkReliabilityDiagnosis; evidence: NetworkReliabilityEvidence; resultMode: NetworkDoctorResultMode }) {
   const { t } = useI18n();
+  const source = resultMode === "demo" ? t("reliability.evidenceSource.synthetic") : t("reliability.evidenceSource.localCollector");
   const nodes = buildPathNodes(summary, evidence, t("status.unknown"), {
     physicalInterface: t("path.physicalInterface"),
     localGateway: t("path.localGateway"),
+    gatewayNotIdentified: t("path.gatewayNotIdentified"),
     gateway: t("reliability.gateway"),
     proxyRules: t("path.proxyRules"),
     proxyExit: t("path.proxyExit"),
@@ -381,16 +385,19 @@ function NetworkPathMap({ summary, evidence }: { summary: NetworkReliabilityDiag
     overlayUtun: t("path.overlayUtun"),
     exitNode: t("path.exitNode"),
     isp: t("path.isp"),
-  });
+  }, source);
   return (
     <div className="network-path-map" aria-label={t("reliability.networkPathView")}>
       {nodes.map((node, index) => (
         <div className="path-node-wrap" key={`${node.label}-${index}`}>
           {index > 0 && <div className="path-connector" aria-hidden="true" />}
           <div className={`path-node ${node.status}`}>
-            <span className="status-dot" />
-            <strong>{node.label}</strong>
+            <div className="path-node-title">
+              <strong>{node.label}</strong>
+              <StatusBadge status={node.status} label={t(`reliability.status.${node.status}`)} />
+            </div>
             {node.detail && <small>{node.detail}</small>}
+            <small className="path-source">{node.source} · {resultMode === "demo" ? t("reliability.resultMode.demo") : t("reliability.resultMode.real")}</small>
           </div>
         </div>
       ))}
@@ -405,6 +412,7 @@ function buildPathNodes(
   labels: {
     physicalInterface: string;
     localGateway: string;
+    gatewayNotIdentified: string;
     gateway: string;
     proxyRules: string;
     proxyExit: string;
@@ -414,43 +422,50 @@ function buildPathNodes(
     exitNode: string;
     isp: string;
   },
+  source: string,
 ): PathNode[] {
   const physical = evidence.physicalLan;
   const overlay = evidence.overlay;
+  const physicalDetail = `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`;
+  const gatewayDetail = physical.gatewayIp ?? labels.gatewayNotIdentified;
+  const gatewayStatus = physical.gatewayIp ? summary.physicalLanStatus : "unknown";
   if (overlay.tailscaleRunning && overlay.tailscaleExitNode) {
     return [
-      { label: "Mac", status: "healthy" },
-      { label: "Tailscale utun", detail: overlay.defaultRouteInterface ?? unknown, status: summary.overlayStatus },
-      { label: labels.exitNode, detail: evidence.external.publicIpOrg ?? unknown, status: summary.externalPathStatus },
-      { label: labels.internet, status: summary.externalPathStatus },
+      { label: "Mac", status: "healthy", source },
+      { label: labels.physicalInterface, detail: physicalDetail, status: summary.physicalLanStatus, source },
+      { label: labels.localGateway, detail: gatewayDetail, status: gatewayStatus, source },
+      { label: "Tailscale utun", detail: overlay.defaultRouteInterface ?? unknown, status: summary.overlayStatus, source },
+      { label: labels.exitNode, detail: evidence.external.publicIpOrg ?? unknown, status: summary.externalPathStatus, source },
+      { label: labels.internet, status: summary.externalPathStatus, source },
     ];
   }
   if (overlay.stashDetected && overlay.stashTunDetected) {
     return [
-      { label: "Mac", status: "healthy" },
-      { label: labels.physicalInterface, detail: `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`, status: summary.physicalLanStatus },
-      { label: labels.localGateway, detail: physical.gatewayIp ?? unknown, status: summary.physicalLanStatus },
-      { label: "Stash TUN", detail: `${overlay.defaultRouteInterface ?? unknown} / ${overlay.defaultRouteGateway ?? "198.18.0.1"}`, status: summary.overlayStatus },
-      { label: labels.proxyRules, status: summary.overlayStatus },
-      { label: labels.proxyExit, detail: evidence.external.publicIpOrg ?? unknown, status: summary.externalPathStatus },
-      { label: labels.internet, status: summary.externalPathStatus },
+      { label: "Mac", status: "healthy", source },
+      { label: labels.physicalInterface, detail: physicalDetail, status: summary.physicalLanStatus, source },
+      { label: labels.localGateway, detail: gatewayDetail, status: gatewayStatus, source },
+      { label: "Stash TUN", detail: `${overlay.defaultRouteInterface ?? unknown}${overlay.defaultRouteGateway ? ` / ${overlay.defaultRouteGateway}` : ""}`, status: summary.overlayStatus, source },
+      { label: labels.proxyRules, status: summary.overlayStatus, source },
+      { label: labels.proxyExit, detail: evidence.external.publicIpOrg ?? unknown, status: summary.externalPathStatus, source },
+      { label: labels.internet, status: summary.externalPathStatus, source },
     ];
   }
   if ((overlay.defaultRouteInterface ?? "").startsWith("utun")) {
     return [
-      { label: "Mac", status: "healthy" },
-      { label: labels.physicalInterface, detail: `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`, status: summary.physicalLanStatus },
-      { label: labels.overlayUtun, detail: overlay.defaultRouteInterface ?? unknown, status: summary.overlayStatus },
-      { label: labels.remotePath, status: summary.externalPathStatus },
-      { label: labels.internet, status: summary.externalPathStatus },
+      { label: "Mac", status: "healthy", source },
+      { label: labels.physicalInterface, detail: physicalDetail, status: summary.physicalLanStatus, source },
+      { label: labels.localGateway, detail: gatewayDetail, status: gatewayStatus, source },
+      { label: labels.overlayUtun, detail: overlay.defaultRouteInterface ?? unknown, status: summary.overlayStatus, source },
+      { label: labels.remotePath, status: summary.externalPathStatus, source },
+      { label: labels.internet, status: summary.externalPathStatus, source },
     ];
   }
   return [
-    { label: "Mac", status: "healthy" },
-    { label: labels.physicalInterface, detail: `${physical.activeInterface || unknown} / ${physical.ipv4 ?? unknown}`, status: summary.physicalLanStatus },
-    { label: labels.gateway, detail: physical.gatewayIp ?? unknown, status: summary.physicalLanStatus },
-    { label: labels.isp, status: summary.externalPathStatus },
-    { label: labels.internet, status: summary.externalPathStatus },
+    { label: "Mac", status: "healthy", source },
+    { label: labels.physicalInterface, detail: physicalDetail, status: summary.physicalLanStatus, source },
+    { label: labels.gateway, detail: gatewayDetail, status: gatewayStatus, source },
+    { label: labels.isp, status: summary.externalPathStatus, source },
+    { label: labels.internet, status: summary.externalPathStatus, source },
   ];
 }
 
@@ -463,13 +478,13 @@ function LatencyVisualization({ evidence }: { evidence: NetworkReliabilityEviden
   const gatewayMin = typeof gatewayAverage === "number" && typeof jitter === "number" ? Math.max(0, gatewayAverage - jitter) : null;
   const gatewayMax = typeof gatewayAverage === "number" && typeof jitter === "number" ? gatewayAverage + jitter : null;
   const rows = [
-    { label: `${t("reliability.gateway")} ${physical.gatewayIp ?? ""}`.trim(), value: gatewayAverage, meta: `${t("latency.avg")} ${formatNullableMs(gatewayAverage, t("status.unknown"))} · ${t("latency.min")} ${formatNullableMs(gatewayMin, t("status.unknown"))} · ${t("latency.max")} ${formatNullableMs(gatewayMax, t("status.unknown"))} · ${formatNullablePercent(physical.gatewayPingLossPct, t("status.unknown"))} ${t("latency.loss")}`, status: physical.gatewayPingLossPct ? "warning" as ReliabilityStatus : "healthy" as ReliabilityStatus, max: 100 },
-    { label: t("latency.gatewayDns"), value: physical.gatewayDnsMs, meta: formatNullableMs(physical.gatewayDnsMs, t("status.unknown")), status: latencyStatus(physical.gatewayDnsMs, 100, 500), max: 500 },
-    { label: t("latency.systemDns"), value: firstTarget?.dnsMs, meta: `${formatNullableMs(firstTarget?.dnsMs, t("status.unknown"))} · ${evidence.overlay.defaultRouteInterface ?? t("status.unknown")}`, status: latencyStatus(firstTarget?.dnsMs, 300, 1000), max: 1000 },
-    { label: t("latency.tcpConnect"), value: firstTarget?.tcpConnectMs, meta: formatNullableMs(firstTarget?.tcpConnectMs, t("status.unknown")), status: latencyStatus(firstTarget?.tcpConnectMs, 1000, 3000), max: 3000 },
-    { label: t("latency.tls"), value: firstTarget?.tlsMs, meta: formatNullableMs(firstTarget?.tlsMs, t("status.unknown")), status: latencyStatus(firstTarget?.tlsMs, 1500, 4000), max: 4000 },
-    { label: t("latency.ttfb"), value: firstTarget?.ttfbMs, meta: formatNullableMs(firstTarget?.ttfbMs, t("status.unknown")), status: latencyStatus(firstTarget?.ttfbMs, 2000, 5000), max: 5000 },
-    { label: firstTarget?.url ?? t("latency.httpsTotal"), value: firstTarget?.totalMs, meta: formatNullableMs(firstTarget?.totalMs, t("status.unknown")), status: latencyStatus(firstTarget?.totalMs, 3000, 8000), max: 8000 },
+    { label: `${t("reliability.gateway")} ${physical.gatewayIp ?? ""}`.trim(), value: gatewayAverage, meta: `${t("latency.avg")} ${formatNullableMs(gatewayAverage, t("status.unknown"))} · ${t("latency.min")} ${formatNullableMs(gatewayMin, t("status.unknown"))} · ${t("latency.max")} ${formatNullableMs(gatewayMax, t("status.unknown"))} · ${formatNullablePercent(physical.gatewayPingLossPct, t("status.unknown"))} ${t("latency.loss")}`, status: physical.gatewayPingLossPct ? "warning" as ReliabilityStatus : "healthy" as ReliabilityStatus, warning: 30, max: 100 },
+    { label: t("latency.gatewayDns"), value: physical.gatewayDnsMs, meta: formatNullableMs(physical.gatewayDnsMs, t("status.unknown")), status: latencyStatus(physical.gatewayDnsMs, reliabilityThresholds.gatewayDnsWarningMs, 500), warning: reliabilityThresholds.gatewayDnsWarningMs, max: 500 },
+    { label: t("latency.systemDns"), value: firstTarget?.dnsMs, meta: `${formatNullableMs(firstTarget?.dnsMs, t("status.unknown"))} · ${evidence.overlay.defaultRouteInterface ?? t("status.unknown")}`, status: latencyStatus(firstTarget?.dnsMs, reliabilityThresholds.systemDnsWarningMs, 1000), warning: reliabilityThresholds.systemDnsWarningMs, max: 1000 },
+    { label: t("latency.tcpConnect"), value: firstTarget?.tcpConnectMs, meta: formatNullableMs(firstTarget?.tcpConnectMs, t("status.unknown")), status: latencyStatus(firstTarget?.tcpConnectMs, reliabilityThresholds.tcpConnectWarningMs, 3000), warning: reliabilityThresholds.tcpConnectWarningMs, max: 3000 },
+    { label: t("latency.tls"), value: firstTarget?.tlsMs, meta: formatNullableMs(firstTarget?.tlsMs, t("status.unknown")), status: latencyStatus(firstTarget?.tlsMs, reliabilityThresholds.tlsWarningMs, 4000), warning: reliabilityThresholds.tlsWarningMs, max: 4000 },
+    { label: t("latency.ttfb"), value: firstTarget?.ttfbMs, meta: formatNullableMs(firstTarget?.ttfbMs, t("status.unknown")), status: latencyStatus(firstTarget?.ttfbMs, reliabilityThresholds.ttfbWarningMs, 5000), warning: reliabilityThresholds.ttfbWarningMs, max: 5000 },
+    { label: firstTarget?.url ?? t("latency.httpsTotal"), value: firstTarget?.totalMs, meta: formatNullableMs(firstTarget?.totalMs, t("status.unknown")), status: latencyStatus(firstTarget?.totalMs, reliabilityThresholds.httpsTotalWarningMs, reliabilityThresholds.httpsTotalCriticalMs), warning: reliabilityThresholds.httpsTotalWarningMs, max: reliabilityThresholds.httpsTotalCriticalMs },
   ];
   return (
     <section className="card compact latency-panel">
@@ -486,14 +501,14 @@ function LatencyVisualization({ evidence }: { evidence: NetworkReliabilityEviden
   );
 }
 
-function LatencyRow({ label, value, meta, status, max }: { label: string; value?: number | null; meta: string; status: ReliabilityStatus; max: number }) {
+function LatencyRow({ label, value, meta, status, warning, max }: { label: string; value?: number | null; meta: string; status: ReliabilityStatus; warning: number; max: number }) {
   const { t } = useI18n();
   const width = typeof value === "number" ? Math.max(2, Math.min(100, (value / max) * 100)) : 4;
   return (
     <div className="latency-row">
       <div><strong>{label}</strong><span>{meta}</span></div>
       <div className="latency-track"><span className={status} style={{ width: `${width}%` }} /></div>
-      <StatusBadge status={status} label={t(`reliability.status.${status}`)} />
+      <StatusBadge status={status} label={latencyStatusLabel(status, value, warning, t)} />
     </div>
   );
 }
@@ -503,6 +518,11 @@ function latencyStatus(value: number | null | undefined, warning: number, critic
   if (value >= critical) return "critical";
   if (value >= warning) return "warning";
   return "healthy";
+}
+
+function latencyStatusLabel(status: ReliabilityStatus, value: number | null | undefined, warning: number, t: (key: string) => string): string {
+  if (status === "healthy" && typeof value === "number" && value >= warning * 0.65) return t("reliability.status.acceptable");
+  return t(`reliability.status.${status}`);
 }
 
 function AuthorizationPage({
@@ -695,30 +715,55 @@ function NetworkInterfaceSelector({
         <div className="interface-list">
           {interfaces.map((item) => {
             const overlay = isOverlayInterface(item.name);
+            const selfAssigned = isSelfAssignedIpv4(item.ipv4);
             const selectedItem = selected === item.name;
             const recommended = preferred?.name === item.name && !overlay;
+            const status: ReliabilityStatus = overlay || selfAssigned ? "warning" : item.ipv4 ? "healthy" : "unknown";
+            const label = overlay
+              ? t("interface.overlayNotRecommended")
+              : selfAssigned
+                ? t("interface.selfAssignedAddress")
+                : item.ipv4
+                  ? t("interface.physicalCandidate")
+                  : t("interface.notAssociated");
             return (
               <button className={selectedItem ? "interface-option active" : "interface-option"} type="button" key={item.name} onClick={() => onSelect(item.name)} disabled={mode === "governance" && overlay}>
                 <span>
-                  <strong>{recommended ? `${t("interface.autoSelected")} · ${item.name}` : item.name}</strong>
-                  <small>{interfaceKindLabel(item.name, t)} · {item.ipv4 || t("interface.noIpv4")}</small>
+                  <strong>{recommended ? `${t("interface.currentAutoSelected")}: ${item.name}` : item.name}</strong>
+                  <small>{t("interface.type")}: {interfaceKindLabel(item.name, t)}</small>
+                  <small>{t("interface.address")}: {item.ipv4 || t("interface.noIpv4")}</small>
+                  <small>{t("interface.state")}: {selfAssigned ? t("interface.notRecommendedPrimary") : label}</small>
                 </span>
-                <StatusBadge status={overlay ? "warning" : item.ipv4 ? "healthy" : "unknown"} label={overlay ? t("interface.overlayNotRecommended") : item.ipv4 ? t("interface.physicalCandidate") : t("interface.notAssociated")} />
+                <StatusBadge status={status} label={label} />
               </button>
             );
           })}
         </div>
       )}
+      {interfaces.some((item) => item.ipv4?.startsWith("172.20.10.")) && <p className="message">{t("interface.mobileHotspotNotice")}</p>}
     </section>
   );
 }
 
 function pickPreferredAuditInterface(interfaces: AuditInterface[]): AuditInterface | undefined {
-  return interfaces.find((item) => !isOverlayInterface(item.name) && item.ipv4) ?? interfaces.find((item) => !isOverlayInterface(item.name)) ?? interfaces[0];
+  return interfaces.find((item) => !isOverlayInterface(item.name) && item.ipv4 && !isSelfAssignedIpv4(item.ipv4) && isPrivateIpv4(item.ipv4))
+    ?? interfaces.find((item) => !isOverlayInterface(item.name) && item.ipv4 && !isSelfAssignedIpv4(item.ipv4))
+    ?? interfaces.find((item) => !isOverlayInterface(item.name))
+    ?? interfaces[0];
 }
 
 function isOverlayInterface(name: string): boolean {
   return name.startsWith("utun") || name.startsWith("tun") || name.startsWith("tap");
+}
+
+function isSelfAssignedIpv4(value?: string | null): boolean {
+  return Boolean(value?.startsWith("169.254."));
+}
+
+function isPrivateIpv4(value: string): boolean {
+  const parts = value.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return false;
+  return parts[0] === 10 || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) || (parts[0] === 192 && parts[1] === 168);
 }
 
 function interfaceKindLabel(name: string, t: (key: string) => string): string {
@@ -1026,6 +1071,9 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
   const [selectedInterface, setSelectedInterface] = useState("");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<NetworkReliabilityRun | null>(null);
+  const [resultMode, setResultMode] = useState<NetworkDoctorResultMode>("empty");
+  const [lastRunAt, setLastRunAt] = useState("");
+  const [lastRunMode, setLastRunMode] = useState<DoctorMode | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const canRun = confirmed && !running;
@@ -1047,20 +1095,35 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
     onRunningChange(true);
     setError("");
     setMessage("");
+    setResult(null);
     try {
       await invoke("authorize_audit", { projectName: mode === "quick" ? "Network Doctor Quick Check" : "Network Doctor Deep Diagnosis" });
       const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check", { mode });
       const completed = { ...next, doctorMode: mode };
       setResult(completed);
+      setResultMode("real");
+      setLastRunAt(completed.evidence.generatedAt ?? new Date().toISOString());
+      setLastRunMode(mode);
       onComplete(completed);
       setMessage(`${t("reliability.savedTo")}: ${completed.outputDirectory}`);
       setConfirmed(false);
     } catch (value) {
       setError(errorMessage(value));
+      setResultMode("failed");
+      setLastRunMode(mode);
     } finally {
       setRunning(false);
       onRunningChange(false);
     }
+  };
+
+  const showDemo = () => {
+    setError("");
+    setMessage("");
+    setResult({ ...demoNetworkReliabilityRun, doctorMode: "quick" });
+    setResultMode("demo");
+    setLastRunAt(demoNetworkReliabilityRun.evidence.generatedAt ?? "");
+    setLastRunMode("quick");
   };
 
   const openArtifact = async (kind: string) => {
@@ -1103,17 +1166,57 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
       <p className="limitation">{t("reliability.pointInTime")}</p>
       {message && <p className="message success-message">{message}</p>}
       {error && <RawDetail detail={error} />}
-      {!result && !error && <NetworkReliabilityResult result={demoNetworkReliabilityRun} onOpenArtifact={openArtifact} demo />}
-      {result && <NetworkReliabilityResult result={result} onOpenArtifact={openArtifact} />}
+      {resultMode === "empty" && !result && !error && <NetworkDoctorEmptyState interfaces={interfaces} selectedInterface={selectedInterface} mode={mode} onDemo={showDemo} />}
+      {resultMode === "failed" && <NetworkDoctorFailedState error={error} mode={mode} />}
+      {result && <NetworkReliabilityResult result={result} resultMode={resultMode} lastRunAt={lastRunAt} lastRunMode={lastRunMode} onOpenArtifact={openArtifact} />}
     </section>
   );
 }
 
-function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { result: NetworkReliabilityRun; onOpenArtifact: (kind: string) => Promise<void>; demo?: boolean }) {
+function NetworkDoctorEmptyState({ interfaces, selectedInterface, mode, onDemo }: { interfaces: AuditInterface[]; selectedInterface: string; mode: DoctorMode; onDemo: () => void }) {
+  const { t } = useI18n();
+  const selected = interfaces.find((item) => item.name === selectedInterface) ?? pickPreferredAuditInterface(interfaces);
+  return (
+    <section className="card compact doctor-empty-state">
+      <div>
+        <span className="eyebrow">{t("reliability.resultMode.empty")}</span>
+        <h2>{t("reliability.emptyTitle")}</h2>
+        <p>{t("reliability.emptyDescription")}</p>
+      </div>
+      <dl className="report-metadata single-column">
+        <div><dt>{t("reliability.lastRun")}</dt><dd>{t("reliability.noRealRunYet")}</dd></div>
+        <div><dt>{t("reliability.pendingMode")}</dt><dd>{mode === "quick" ? t("reliability.quickCheck") : t("reliability.deepDiagnosis")}</dd></div>
+        <div><dt>{t("reliability.localInterfaceSummary")}</dt><dd>{selected ? `${selected.name} / ${selected.ipv4 || t("interface.noIpv4")}` : t("interface.noInterfaces")}</dd></div>
+      </dl>
+      <div className="actions">
+        <button className="secondary" type="button" onClick={onDemo}>{t("reliability.viewDemoResult")}</button>
+      </div>
+    </section>
+  );
+}
+
+function NetworkDoctorFailedState({ error, mode }: { error: string; mode: DoctorMode }) {
+  const { t } = useI18n();
+  return (
+    <section className="card compact doctor-empty-state failed">
+      <span className="eyebrow">{t("reliability.resultMode.failed")}</span>
+      <h2>{t("reliability.failedTitle")}</h2>
+      <p>{t("reliability.failedDescription")}</p>
+      <dl className="report-metadata single-column">
+        <div><dt>{t("reliability.lastRunMode")}</dt><dd>{mode === "quick" ? t("reliability.quickCheck") : t("reliability.deepDiagnosis")}</dd></div>
+        <div><dt>{t("common.error")}</dt><dd>{error || t("status.unknown")}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function NetworkReliabilityResult({ result, resultMode, lastRunAt, lastRunMode, onOpenArtifact }: { result: NetworkReliabilityRun; resultMode: NetworkDoctorResultMode; lastRunAt: string; lastRunMode: DoctorMode | null; onOpenArtifact: (kind: string) => Promise<void> }) {
   const { locale, t } = useI18n();
   const summary = result.summary;
   const evidence = result.evidence;
   const doctor = diagnoseNetworkDoctor(evidence, result.doctorMode ?? "quick");
+  const demo = resultMode === "demo";
+  const evidenceSource = demo ? "synthetic" : "local-collector";
   const overlayComponents = [
     evidence.overlay.stashDetected ? "Stash" : "",
     evidence.overlay.tailscaleRunning ? "Tailscale" : "",
@@ -1125,7 +1228,7 @@ function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { re
 
   return (
     <div className="content-stack">
-      {demo && <p className="message demo-message">{t("overview.demoNotice")}</p>}
+      {demo && <p className="message demo-message">{t("reliability.demoModeNotice")}</p>}
       <section className="card compact doctor-hero">
         <div>
           <div className="panel-heading">
@@ -1134,6 +1237,7 @@ function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { re
           </div>
           <h2>{t("reliability.currentPath")}</h2>
           <p>{doctor.currentNetworkPath}</p>
+          <p className="muted">{formatRunMetadata(resultMode, evidenceSource, lastRunAt, lastRunMode, t)}</p>
         </div>
         <div className="doctor-score">
           <span>{t("reliability.score")}</span>
@@ -1144,8 +1248,8 @@ function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { re
       <div className="doctor-overview-grid">
         <section className="card compact">
           <h2>{t("reliability.primaryFaultDomain")}</h2>
-          <p className="doctor-domain">{formatDomainLabel(doctor.primaryFaultDomain, locale)}</p>
-          <p className="muted">{doctor.osiLayerMapping.map((item) => item.layers.join(" / ")).join(" · ") || t("status.unknown")}</p>
+          <p className="doctor-domain">{formatPrimaryFaultSummary(doctor.primaryFaultDomain, doctor.overallStatus, locale, t)}</p>
+          <p className="muted">{formatOsiLayerSummary(doctor.osiLayerMapping, t)}</p>
         </section>
         <section className="card compact">
           <h2>{t("reliability.contributingDomains")}</h2>
@@ -1154,8 +1258,8 @@ function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { re
         </section>
       </div>
       <DoctorScorecards scorecards={doctor.scorecards} />
-      <RootCauseCandidates candidates={doctor.rootCauseCandidates.slice(0, 3)} />
-      <DoctorActionPanel candidate={doctor.rootCauseCandidates[0]} />
+      <RootCauseCandidates candidates={doctor.rootCauseCandidates.slice(0, 3)} overallStatus={doctor.overallStatus} primaryFaultDomain={doctor.primaryFaultDomain} />
+      <DoctorActionPanel candidate={doctor.rootCauseCandidates[0]} overallStatus={doctor.overallStatus} primaryFaultDomain={doctor.primaryFaultDomain} />
       <div className="summary-grid reliability-summary">
         <ReliabilitySummaryCard label={t("reliability.overallStatus")} status={summary.overallStatus} />
         <ReliabilitySummaryCard label={t("reliability.physicalLan")} status={summary.physicalLanStatus} />
@@ -1165,7 +1269,7 @@ function NetworkReliabilityResult({ result, onOpenArtifact, demo = false }: { re
       </div>
       <section className="card compact reliability-path">
         <h2>{t("reliability.networkPathView")}</h2>
-        <NetworkPathMap summary={summary} evidence={evidence} />
+        <NetworkPathMap summary={summary} evidence={evidence} resultMode={resultMode} />
       </section>
       <LatencyVisualization evidence={evidence} />
       <div className="reliability-grid">
@@ -1253,8 +1357,16 @@ function DoctorScorecards({ scorecards }: { scorecards: DoctorScorecard[] }) {
   );
 }
 
-function RootCauseCandidates({ candidates }: { candidates: RootCauseCandidate[] }) {
+function RootCauseCandidates({ candidates, overallStatus, primaryFaultDomain }: { candidates: RootCauseCandidate[]; overallStatus: ReliabilityStatus; primaryFaultDomain: DiagnosticDomain }) {
   const { locale, t } = useI18n();
+  if (primaryFaultDomain === "unknown" && overallStatus === "healthy") {
+    return (
+      <section className="card compact root-cause-panel">
+        <h2>{t("reliability.rootCauseTop3")}</h2>
+        <p className="message">{t("reliability.noClearFaultDetected")}</p>
+      </section>
+    );
+  }
   return (
     <section className="card compact root-cause-panel">
       <h2>{t("reliability.rootCauseTop3")}</h2>
@@ -1269,14 +1381,8 @@ function RootCauseCandidates({ candidates }: { candidates: RootCauseCandidate[] 
               <div><dt>{t("reliability.probability")}</dt><dd>{candidate.probability}%</dd></div>
               <div><dt>{t("reliability.confidence")}</dt><dd>{formatConfidence(candidate.confidence, locale)}</dd></div>
             </dl>
-            <details>
-              <summary>{t("reliability.evidenceFor")}</summary>
-              <ul>{candidate.evidenceFor.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
-            </details>
-            <details>
-              <summary>{t("reliability.evidenceAgainst")}</summary>
-              <ul>{candidate.evidenceAgainst.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
-            </details>
+            <EvidenceDetails title={t("reliability.evidenceFor")} items={candidate.evidenceFor} locale={locale} />
+            <EvidenceDetails title={t("reliability.evidenceAgainst")} items={candidate.evidenceAgainst} locale={locale} />
           </article>
         ))}
       </div>
@@ -1284,9 +1390,21 @@ function RootCauseCandidates({ candidates }: { candidates: RootCauseCandidate[] 
   );
 }
 
-function DoctorActionPanel({ candidate }: { candidate: RootCauseCandidate | undefined }) {
+function EvidenceDetails({ title, items, locale }: { title: string; items: string[]; locale: Locale }) {
+  const { t } = useI18n();
+  if (items.length === 0) return <p className="muted">{t("reliability.insufficientEvidence")}</p>;
+  return (
+    <details>
+      <summary>{title}</summary>
+      <ul>{items.map((item) => <li key={item}>{localizeReliabilityText(item, locale)}</li>)}</ul>
+    </details>
+  );
+}
+
+function DoctorActionPanel({ candidate, overallStatus, primaryFaultDomain }: { candidate: RootCauseCandidate | undefined; overallStatus: ReliabilityStatus; primaryFaultDomain: DiagnosticDomain }) {
   const { locale, t } = useI18n();
   if (!candidate) return null;
+  if (primaryFaultDomain === "unknown" && overallStatus === "healthy") return null;
   return (
     <section className="card compact doctor-action-panel">
       <div className="panel-heading">
@@ -1372,6 +1490,142 @@ function formatNumber(value: number): string {
 }
 
 function localizeReliabilityText(value: string, locale: Locale): string {
+  const adviceKeys: Record<Locale, Record<string, string>> = {
+    en: {
+      "doctorAdvice.deepSample.action": "Collect a Deep Diagnosis sample.",
+      "doctorAdvice.deepSample.reason": "Current evidence does not support one high-confidence root cause.",
+      "doctorAdvice.deepSample.risk": "The check takes longer than Quick Check.",
+      "doctorAdvice.deepSample.expected": "Additional samples improve confidence.",
+      "doctorAdvice.deepSample.verify": "Run Deep Diagnosis and compare candidate probabilities.",
+      "doctorAdvice.saveBaseline.action": "Save the current result as a baseline.",
+      "doctorAdvice.saveBaseline.reason": "A healthy or ambiguous run can still help future comparisons.",
+      "doctorAdvice.saveBaseline.risk": "Baseline labels must describe the network state.",
+      "doctorAdvice.saveBaseline.expected": "Future route, DNS, and latency changes are easier to explain.",
+      "doctorAdvice.saveBaseline.verify": "Compare the next run against this snapshot.",
+    },
+    "zh-CN": {
+      "doctorAdvice.deepSample.action": "采集一次深度诊断样本",
+      "doctorAdvice.deepSample.reason": "当前证据不足以支持单一高置信度根因。",
+      "doctorAdvice.deepSample.risk": "该检查比快速诊断耗时更长。",
+      "doctorAdvice.deepSample.expected": "更多样本可以提高判断置信度。",
+      "doctorAdvice.deepSample.verify": "运行深度诊断并比较候选根因概率。",
+      "doctorAdvice.saveBaseline.action": "将当前结果保存为基线",
+      "doctorAdvice.saveBaseline.reason": "健康或不明确的运行结果仍可用于后续对比。",
+      "doctorAdvice.saveBaseline.risk": "基线标签必须准确描述当时网络状态。",
+      "doctorAdvice.saveBaseline.expected": "后续路由、DNS 和延迟变化会更容易解释。",
+      "doctorAdvice.saveBaseline.verify": "将下一次运行结果与此快照对比。",
+    },
+    "zh-TW": {
+      "doctorAdvice.deepSample.action": "採集一次深度診斷樣本",
+      "doctorAdvice.deepSample.reason": "目前證據不足以支持單一高信賴度根因。",
+      "doctorAdvice.deepSample.risk": "此檢查比快速診斷耗時更長。",
+      "doctorAdvice.deepSample.expected": "更多樣本可以提高判斷信賴度。",
+      "doctorAdvice.deepSample.verify": "執行深度診斷並比較候選根因機率。",
+      "doctorAdvice.saveBaseline.action": "將目前結果儲存為基線",
+      "doctorAdvice.saveBaseline.reason": "健康或不明確的執行結果仍可用於後續比較。",
+      "doctorAdvice.saveBaseline.risk": "基線標籤必須準確描述當時網路狀態。",
+      "doctorAdvice.saveBaseline.expected": "後續路由、DNS 與延遲變化會更容易解釋。",
+      "doctorAdvice.saveBaseline.verify": "將下一次執行結果與此快照比較。",
+    },
+    ja: {
+      "doctorAdvice.deepSample.action": "詳細診断サンプルを収集",
+      "doctorAdvice.deepSample.reason": "現在の証拠では高信頼の単一根因を支持できません。",
+      "doctorAdvice.deepSample.risk": "Quick Check より時間がかかります。",
+      "doctorAdvice.deepSample.expected": "サンプルが増えるほど信頼度が上がります。",
+      "doctorAdvice.deepSample.verify": "詳細診断を実行し、候補確率を比較します。",
+      "doctorAdvice.saveBaseline.action": "現在の結果をベースラインとして保存",
+      "doctorAdvice.saveBaseline.reason": "正常または曖昧な結果も将来比較に役立ちます。",
+      "doctorAdvice.saveBaseline.risk": "ベースライン名はネットワーク状態を正確に示す必要があります。",
+      "doctorAdvice.saveBaseline.expected": "今後のルート、DNS、遅延変化を説明しやすくなります。",
+      "doctorAdvice.saveBaseline.verify": "次回実行をこのスナップショットと比較します。",
+    },
+    ko: {
+      "doctorAdvice.deepSample.action": "심층 진단 샘플 수집",
+      "doctorAdvice.deepSample.reason": "현재 근거만으로는 단일 고신뢰 원인을 지지하기 어렵습니다.",
+      "doctorAdvice.deepSample.risk": "Quick Check보다 시간이 더 걸립니다.",
+      "doctorAdvice.deepSample.expected": "샘플이 늘어나면 신뢰도가 높아집니다.",
+      "doctorAdvice.deepSample.verify": "심층 진단을 실행하고 후보 확률을 비교합니다.",
+      "doctorAdvice.saveBaseline.action": "현재 결과를 기준선으로 저장",
+      "doctorAdvice.saveBaseline.reason": "정상 또는 모호한 결과도 향후 비교에 도움이 됩니다.",
+      "doctorAdvice.saveBaseline.risk": "기준선 라벨은 네트워크 상태를 정확히 설명해야 합니다.",
+      "doctorAdvice.saveBaseline.expected": "향후 경로, DNS, 지연 변화 해석이 쉬워집니다.",
+      "doctorAdvice.saveBaseline.verify": "다음 실행 결과를 이 스냅샷과 비교합니다.",
+    },
+    de: {
+      "doctorAdvice.deepSample.action": "Eine Deep-Diagnosis-Probe erfassen.",
+      "doctorAdvice.deepSample.reason": "Die aktuellen Nachweise stützen keine einzelne Ursache mit hoher Konfidenz.",
+      "doctorAdvice.deepSample.risk": "Die Prüfung dauert länger als Quick Check.",
+      "doctorAdvice.deepSample.expected": "Mehr Proben erhöhen die Konfidenz.",
+      "doctorAdvice.deepSample.verify": "Deep Diagnosis ausführen und Kandidatenwahrscheinlichkeiten vergleichen.",
+      "doctorAdvice.saveBaseline.action": "Aktuelles Ergebnis als Baseline speichern.",
+      "doctorAdvice.saveBaseline.reason": "Auch ein gesunder oder uneindeutiger Lauf hilft späteren Vergleichen.",
+      "doctorAdvice.saveBaseline.risk": "Baseline-Beschriftungen müssen den Netzwerkzustand beschreiben.",
+      "doctorAdvice.saveBaseline.expected": "Spätere Änderungen an Route, DNS und Latenz sind leichter erklärbar.",
+      "doctorAdvice.saveBaseline.verify": "Den nächsten Lauf mit diesem Snapshot vergleichen.",
+    },
+    fr: {
+      "doctorAdvice.deepSample.action": "Collecter un échantillon de diagnostic approfondi.",
+      "doctorAdvice.deepSample.reason": "Les preuves actuelles ne soutiennent pas une cause unique avec forte confiance.",
+      "doctorAdvice.deepSample.risk": "La vérification dure plus longtemps que Quick Check.",
+      "doctorAdvice.deepSample.expected": "Des échantillons supplémentaires améliorent la confiance.",
+      "doctorAdvice.deepSample.verify": "Exécuter le diagnostic approfondi et comparer les probabilités candidates.",
+      "doctorAdvice.saveBaseline.action": "Enregistrer le résultat actuel comme baseline.",
+      "doctorAdvice.saveBaseline.reason": "Un résultat sain ou ambigu reste utile pour les comparaisons futures.",
+      "doctorAdvice.saveBaseline.risk": "Les libellés de baseline doivent décrire l’état réseau.",
+      "doctorAdvice.saveBaseline.expected": "Les futurs changements de route, DNS et latence seront plus faciles à expliquer.",
+      "doctorAdvice.saveBaseline.verify": "Comparer la prochaine exécution avec cet instantané.",
+    },
+    es: {
+      "doctorAdvice.deepSample.action": "Recopilar una muestra de diagnóstico profundo.",
+      "doctorAdvice.deepSample.reason": "La evidencia actual no respalda una única causa con alta confianza.",
+      "doctorAdvice.deepSample.risk": "La comprobación tarda más que Quick Check.",
+      "doctorAdvice.deepSample.expected": "Más muestras mejoran la confianza.",
+      "doctorAdvice.deepSample.verify": "Ejecutar diagnóstico profundo y comparar probabilidades candidatas.",
+      "doctorAdvice.saveBaseline.action": "Guardar el resultado actual como línea base.",
+      "doctorAdvice.saveBaseline.reason": "Una ejecución sana o ambigua también ayuda en comparaciones futuras.",
+      "doctorAdvice.saveBaseline.risk": "Las etiquetas de línea base deben describir el estado de red.",
+      "doctorAdvice.saveBaseline.expected": "Los futuros cambios de ruta, DNS y latencia serán más fáciles de explicar.",
+      "doctorAdvice.saveBaseline.verify": "Comparar la próxima ejecución con esta instantánea.",
+    },
+    "pt-BR": {
+      "doctorAdvice.deepSample.action": "Coletar uma amostra de diagnóstico profundo.",
+      "doctorAdvice.deepSample.reason": "As evidências atuais não sustentam uma causa única com alta confiança.",
+      "doctorAdvice.deepSample.risk": "A verificação leva mais tempo que o Quick Check.",
+      "doctorAdvice.deepSample.expected": "Mais amostras aumentam a confiança.",
+      "doctorAdvice.deepSample.verify": "Executar diagnóstico profundo e comparar probabilidades candidatas.",
+      "doctorAdvice.saveBaseline.action": "Salvar o resultado atual como baseline.",
+      "doctorAdvice.saveBaseline.reason": "Uma execução saudável ou ambígua ainda ajuda comparações futuras.",
+      "doctorAdvice.saveBaseline.risk": "Os rótulos de baseline devem descrever o estado da rede.",
+      "doctorAdvice.saveBaseline.expected": "Mudanças futuras de rota, DNS e latência ficam mais fáceis de explicar.",
+      "doctorAdvice.saveBaseline.verify": "Comparar a próxima execução com este snapshot.",
+    },
+    it: {
+      "doctorAdvice.deepSample.action": "Raccogliere un campione di diagnosi approfondita.",
+      "doctorAdvice.deepSample.reason": "Le evidenze attuali non supportano una singola causa ad alta confidenza.",
+      "doctorAdvice.deepSample.risk": "La verifica richiede più tempo di Quick Check.",
+      "doctorAdvice.deepSample.expected": "Più campioni migliorano la confidenza.",
+      "doctorAdvice.deepSample.verify": "Eseguire la diagnosi approfondita e confrontare le probabilità candidate.",
+      "doctorAdvice.saveBaseline.action": "Salvare il risultato attuale come baseline.",
+      "doctorAdvice.saveBaseline.reason": "Un risultato sano o ambiguo aiuta comunque i confronti futuri.",
+      "doctorAdvice.saveBaseline.risk": "Le etichette baseline devono descrivere lo stato della rete.",
+      "doctorAdvice.saveBaseline.expected": "Le future variazioni di route, DNS e latenza saranno più facili da spiegare.",
+      "doctorAdvice.saveBaseline.verify": "Confrontare la prossima esecuzione con questo snapshot.",
+    },
+    nl: {
+      "doctorAdvice.deepSample.action": "Een Deep Diagnosis-sample verzamelen.",
+      "doctorAdvice.deepSample.reason": "Het huidige bewijs ondersteunt geen enkele oorzaak met hoge zekerheid.",
+      "doctorAdvice.deepSample.risk": "De controle duurt langer dan Quick Check.",
+      "doctorAdvice.deepSample.expected": "Meer samples verhogen de zekerheid.",
+      "doctorAdvice.deepSample.verify": "Deep Diagnosis uitvoeren en kandidaatkansen vergelijken.",
+      "doctorAdvice.saveBaseline.action": "Het huidige resultaat als baseline opslaan.",
+      "doctorAdvice.saveBaseline.reason": "Een gezonde of dubbelzinnige run helpt nog steeds bij latere vergelijkingen.",
+      "doctorAdvice.saveBaseline.risk": "Baseline-labels moeten de netwerkstatus beschrijven.",
+      "doctorAdvice.saveBaseline.expected": "Latere route-, DNS- en latentieverschillen zijn makkelijker te verklaren.",
+      "doctorAdvice.saveBaseline.verify": "Vergelijk de volgende run met deze snapshot.",
+    },
+  };
+  const englishAdvice = adviceKeys.en[value];
+  if (englishAdvice) return adviceKeys[locale][value] ?? englishAdvice;
   const zhCN: Record<string, string> = {
     "Physical LAN is healthy; internet path is currently handled by Stash TUN.": "物理网络正常，当前上网路径由 Stash TUN 接管。",
     "No physical LAN fault is indicated; traffic is intentionally using an overlay path.": "当前没有物理网络故障迹象，流量正在按预期使用 Overlay 路径。",
@@ -1406,40 +1660,58 @@ function localizeReliabilityText(value: string, locale: Locale): string {
   return value;
 }
 
+function formatRunMetadata(resultMode: NetworkDoctorResultMode, evidenceSource: string, lastRunAt: string, lastRunMode: DoctorMode | null, t: (key: string) => string): string {
+  const modeLabel = resultMode === "demo" ? t("reliability.resultMode.demo") : resultMode === "real" ? t("reliability.resultMode.real") : t(`reliability.resultMode.${resultMode}`);
+  const runMode = lastRunMode ? (lastRunMode === "quick" ? t("reliability.quickCheck") : t("reliability.deepDiagnosis")) : t("status.unknown");
+  return `${t("reliability.resultMode")}: ${modeLabel} · ${t("reliability.evidenceSource")}: ${evidenceSource} · ${t("reliability.lastRun")}: ${lastRunAt || t("status.unknown")} · ${runMode}`;
+}
+
+function formatPrimaryFaultSummary(domain: DiagnosticDomain, status: ReliabilityStatus, locale: Locale, t: (key: string) => string): string {
+  if (domain === "unknown" && status === "healthy") return t("reliability.noClearFaultDetected");
+  if (domain === "unknown" && status === "warning") return t("reliability.needsDeepDiagnosis");
+  if (domain === "unknown") return t("reliability.undetermined");
+  return formatDomainLabel(domain, locale);
+}
+
+function formatOsiLayerSummary(mapping: { layers: string[] }[], t: (key: string) => string): string {
+  const layers = mapping.flatMap((item) => item.layers).filter(Boolean);
+  return layers.length ? Array.from(new Set(layers)).join(" / ") : t("reliability.undetermined");
+}
+
 function formatDomainLabel(domain: DiagnosticDomain, locale: Locale): string {
   const labels: Record<Locale, Partial<Record<DiagnosticDomain, string>>> = {
     en: {
-      local_host: "Local host", physical_interface: "Physical interface", wifi_radio: "Wi-Fi radio", ethernet_link: "Ethernet link", dhcp: "DHCP", gateway: "Gateway", local_dns: "Local DNS", system_dns: "System DNS", route: "Route", overlay_proxy: "Overlay / Proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "External path", application_endpoint: "Application endpoint", router_health: "Router health", unknown: "Unknown",
+      local_host: "Local host", physical_interface: "Physical interface", wifi_radio: "Wi-Fi radio", ethernet_link: "Ethernet link", dhcp: "DHCP", gateway: "Gateway", local_dns: "Local DNS", system_dns: "System DNS", route: "Route", overlay_proxy: "Overlay / Proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "External path", application_endpoint: "Application endpoint", router_health: "Router health", unknown: "Undetermined",
     },
     "zh-CN": {
-      local_host: "本机", physical_interface: "物理接口", wifi_radio: "Wi-Fi 射频", ethernet_link: "以太网链路", dhcp: "DHCP", gateway: "网关", local_dns: "本地 DNS", system_dns: "系统 DNS", route: "路由", overlay_proxy: "Overlay / 代理", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部路径", application_endpoint: "应用端点", router_health: "路由器健康", unknown: "未知",
+      local_host: "本机", physical_interface: "物理接口", wifi_radio: "Wi-Fi 射频", ethernet_link: "以太网链路", dhcp: "DHCP", gateway: "网关", local_dns: "本地 DNS", system_dns: "系统 DNS", route: "路由", overlay_proxy: "Overlay / 代理", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部路径", application_endpoint: "应用端点", router_health: "路由器健康", unknown: "未确定",
     },
     "zh-TW": {
-      local_host: "本機", physical_interface: "實體介面", wifi_radio: "Wi-Fi 射頻", ethernet_link: "乙太網路鏈路", dhcp: "DHCP", gateway: "閘道", local_dns: "本機 DNS", system_dns: "系統 DNS", route: "路由", overlay_proxy: "Overlay / 代理", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部路徑", application_endpoint: "應用端點", router_health: "路由器健康", unknown: "未知",
+      local_host: "本機", physical_interface: "實體介面", wifi_radio: "Wi-Fi 射頻", ethernet_link: "乙太網路鏈路", dhcp: "DHCP", gateway: "閘道", local_dns: "本機 DNS", system_dns: "系統 DNS", route: "路由", overlay_proxy: "Overlay / 代理", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部路徑", application_endpoint: "應用端點", router_health: "路由器健康", unknown: "未確定",
     },
     ja: {
-      local_host: "ローカルホスト", physical_interface: "物理インターフェース", wifi_radio: "Wi-Fi 無線", ethernet_link: "Ethernet リンク", dhcp: "DHCP", gateway: "ゲートウェイ", local_dns: "ローカル DNS", system_dns: "システム DNS", route: "ルート", overlay_proxy: "Overlay / プロキシ", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部経路", application_endpoint: "アプリ端点", router_health: "ルーター状態", unknown: "不明",
+      local_host: "ローカルホスト", physical_interface: "物理インターフェース", wifi_radio: "Wi-Fi 無線", ethernet_link: "Ethernet リンク", dhcp: "DHCP", gateway: "ゲートウェイ", local_dns: "ローカル DNS", system_dns: "システム DNS", route: "ルート", overlay_proxy: "Overlay / プロキシ", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "外部経路", application_endpoint: "アプリ端点", router_health: "ルーター状態", unknown: "未確定",
     },
     ko: {
-      local_host: "로컬 호스트", physical_interface: "물리 인터페이스", wifi_radio: "Wi-Fi 무선", ethernet_link: "이더넷 링크", dhcp: "DHCP", gateway: "게이트웨이", local_dns: "로컬 DNS", system_dns: "시스템 DNS", route: "경로", overlay_proxy: "Overlay / 프록시", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "외부 경로", application_endpoint: "애플리케이션 엔드포인트", router_health: "라우터 상태", unknown: "알 수 없음",
+      local_host: "로컬 호스트", physical_interface: "물리 인터페이스", wifi_radio: "Wi-Fi 무선", ethernet_link: "이더넷 링크", dhcp: "DHCP", gateway: "게이트웨이", local_dns: "로컬 DNS", system_dns: "시스템 DNS", route: "경로", overlay_proxy: "Overlay / 프록시", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "외부 경로", application_endpoint: "애플리케이션 엔드포인트", router_health: "라우터 상태", unknown: "미확정",
     },
     de: {
-      local_host: "Lokaler Host", physical_interface: "Physische Schnittstelle", wifi_radio: "WLAN-Funk", ethernet_link: "Ethernet-Link", dhcp: "DHCP", gateway: "Gateway", local_dns: "Lokales DNS", system_dns: "System-DNS", route: "Route", overlay_proxy: "Overlay / Proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Externer Pfad", application_endpoint: "App-Endpunkt", router_health: "Routerzustand", unknown: "Unbekannt",
+      local_host: "Lokaler Host", physical_interface: "Physische Schnittstelle", wifi_radio: "WLAN-Funk", ethernet_link: "Ethernet-Link", dhcp: "DHCP", gateway: "Gateway", local_dns: "Lokales DNS", system_dns: "System-DNS", route: "Route", overlay_proxy: "Overlay / Proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Externer Pfad", application_endpoint: "App-Endpunkt", router_health: "Routerzustand", unknown: "Nicht bestimmt",
     },
     fr: {
-      local_host: "Hôte local", physical_interface: "Interface physique", wifi_radio: "Radio Wi-Fi", ethernet_link: "Lien Ethernet", dhcp: "DHCP", gateway: "Passerelle", local_dns: "DNS local", system_dns: "DNS système", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Chemin externe", application_endpoint: "Point applicatif", router_health: "Santé routeur", unknown: "Inconnu",
+      local_host: "Hôte local", physical_interface: "Interface physique", wifi_radio: "Radio Wi-Fi", ethernet_link: "Lien Ethernet", dhcp: "DHCP", gateway: "Passerelle", local_dns: "DNS local", system_dns: "DNS système", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Chemin externe", application_endpoint: "Point applicatif", router_health: "Santé routeur", unknown: "Indéterminé",
     },
     es: {
-      local_host: "Host local", physical_interface: "Interfaz física", wifi_radio: "Radio Wi-Fi", ethernet_link: "Enlace Ethernet", dhcp: "DHCP", gateway: "Puerta de enlace", local_dns: "DNS local", system_dns: "DNS del sistema", route: "Ruta", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Ruta externa", application_endpoint: "Endpoint de aplicación", router_health: "Salud del router", unknown: "Desconocido",
+      local_host: "Host local", physical_interface: "Interfaz física", wifi_radio: "Radio Wi-Fi", ethernet_link: "Enlace Ethernet", dhcp: "DHCP", gateway: "Puerta de enlace", local_dns: "DNS local", system_dns: "DNS del sistema", route: "Ruta", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Ruta externa", application_endpoint: "Endpoint de aplicación", router_health: "Salud del router", unknown: "Sin determinar",
     },
     "pt-BR": {
-      local_host: "Host local", physical_interface: "Interface física", wifi_radio: "Rádio Wi-Fi", ethernet_link: "Link Ethernet", dhcp: "DHCP", gateway: "Gateway", local_dns: "DNS local", system_dns: "DNS do sistema", route: "Rota", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Caminho externo", application_endpoint: "Endpoint da aplicação", router_health: "Saúde do roteador", unknown: "Desconhecido",
+      local_host: "Host local", physical_interface: "Interface física", wifi_radio: "Rádio Wi-Fi", ethernet_link: "Link Ethernet", dhcp: "DHCP", gateway: "Gateway", local_dns: "DNS local", system_dns: "DNS do sistema", route: "Rota", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Caminho externo", application_endpoint: "Endpoint da aplicação", router_health: "Saúde do roteador", unknown: "Indeterminado",
     },
     it: {
-      local_host: "Host locale", physical_interface: "Interfaccia fisica", wifi_radio: "Radio Wi-Fi", ethernet_link: "Link Ethernet", dhcp: "DHCP", gateway: "Gateway", local_dns: "DNS locale", system_dns: "DNS di sistema", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Percorso esterno", application_endpoint: "Endpoint applicativo", router_health: "Salute router", unknown: "Sconosciuto",
+      local_host: "Host locale", physical_interface: "Interfaccia fisica", wifi_radio: "Radio Wi-Fi", ethernet_link: "Link Ethernet", dhcp: "DHCP", gateway: "Gateway", local_dns: "DNS locale", system_dns: "DNS di sistema", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Percorso esterno", application_endpoint: "Endpoint applicativo", router_health: "Salute router", unknown: "Non determinato",
     },
     nl: {
-      local_host: "Lokale host", physical_interface: "Fysieke interface", wifi_radio: "Wi-Fi-radio", ethernet_link: "Ethernetlink", dhcp: "DHCP", gateway: "Gateway", local_dns: "Lokaal DNS", system_dns: "Systeem-DNS", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Extern pad", application_endpoint: "Applicatie-eindpunt", router_health: "Routergezondheid", unknown: "Onbekend",
+      local_host: "Lokale host", physical_interface: "Fysieke interface", wifi_radio: "Wi-Fi-radio", ethernet_link: "Ethernetlink", dhcp: "DHCP", gateway: "Gateway", local_dns: "Lokaal DNS", system_dns: "Systeem-DNS", route: "Route", overlay_proxy: "Overlay / proxy", tailscale: "Tailscale", transport_tcp: "TCP", transport_udp: "UDP / QUIC", tls: "TLS", external_path: "Extern pad", application_endpoint: "Applicatie-eindpunt", router_health: "Routergezondheid", unknown: "Onbepaald",
     },
   };
   return labels[locale][domain] ?? labels.en[domain] ?? domain;
@@ -1447,17 +1719,17 @@ function formatDomainLabel(domain: DiagnosticDomain, locale: Locale): string {
 
 function formatScoreState(state: DoctorScoreState, locale: Locale): string {
   const values: Record<Locale, Record<DoctorScoreState, string>> = {
-    en: { Excellent: "Excellent", Healthy: "Healthy", Degraded: "Degraded", Poor: "Poor", Critical: "Critical" },
-    "zh-CN": { Excellent: "优秀", Healthy: "健康", Degraded: "降级", Poor: "较差", Critical: "严重" },
-    "zh-TW": { Excellent: "優秀", Healthy: "健康", Degraded: "降級", Poor: "較差", Critical: "嚴重" },
-    ja: { Excellent: "優秀", Healthy: "正常", Degraded: "低下", Poor: "不良", Critical: "重大" },
-    ko: { Excellent: "매우 좋음", Healthy: "정상", Degraded: "저하", Poor: "나쁨", Critical: "심각" },
-    de: { Excellent: "Exzellent", Healthy: "Gesund", Degraded: "Beeinträchtigt", Poor: "Schwach", Critical: "Kritisch" },
-    fr: { Excellent: "Excellent", Healthy: "Sain", Degraded: "Dégradé", Poor: "Médiocre", Critical: "Critique" },
-    es: { Excellent: "Excelente", Healthy: "Saludable", Degraded: "Degradado", Poor: "Deficiente", Critical: "Crítico" },
-    "pt-BR": { Excellent: "Excelente", Healthy: "Saudável", Degraded: "Degradado", Poor: "Ruim", Critical: "Crítico" },
-    it: { Excellent: "Eccellente", Healthy: "Sano", Degraded: "Degradato", Poor: "Scarso", Critical: "Critico" },
-    nl: { Excellent: "Uitstekend", Healthy: "Gezond", Degraded: "Verminderd", Poor: "Zwak", Critical: "Kritiek" },
+    en: { Excellent: "Excellent", Healthy: "Healthy", Acceptable: "Acceptable", Warning: "Warning", Critical: "Critical" },
+    "zh-CN": { Excellent: "优秀", Healthy: "正常", Acceptable: "可接受", Warning: "警告", Critical: "严重" },
+    "zh-TW": { Excellent: "優秀", Healthy: "正常", Acceptable: "可接受", Warning: "警告", Critical: "嚴重" },
+    ja: { Excellent: "優秀", Healthy: "正常", Acceptable: "許容範囲", Warning: "警告", Critical: "重大" },
+    ko: { Excellent: "매우 좋음", Healthy: "정상", Acceptable: "허용 가능", Warning: "경고", Critical: "심각" },
+    de: { Excellent: "Exzellent", Healthy: "Gesund", Acceptable: "Akzeptabel", Warning: "Warnung", Critical: "Kritisch" },
+    fr: { Excellent: "Excellent", Healthy: "Sain", Acceptable: "Acceptable", Warning: "Avertissement", Critical: "Critique" },
+    es: { Excellent: "Excelente", Healthy: "Saludable", Acceptable: "Aceptable", Warning: "Advertencia", Critical: "Crítico" },
+    "pt-BR": { Excellent: "Excelente", Healthy: "Saudável", Acceptable: "Aceitável", Warning: "Aviso", Critical: "Crítico" },
+    it: { Excellent: "Eccellente", Healthy: "Sano", Acceptable: "Accettabile", Warning: "Avviso", Critical: "Critico" },
+    nl: { Excellent: "Uitstekend", Healthy: "Gezond", Acceptable: "Acceptabel", Warning: "Waarschuwing", Critical: "Kritiek" },
   };
   return values[locale][state];
 }
@@ -1501,7 +1773,7 @@ function formatScorecardName(name: DoctorScorecard["name"], locale: Locale): str
 
 function localizeDoctorTitle(value: string, locale: Locale): string {
   const zhCN: Record<string, string> = {
-    "No single root cause has enough evidence yet": "当前证据不足以支持单一根因",
+    "No clear fault detected": "未发现明确故障",
     "Overlay or proxy path is the likely inspection point": "Overlay 或代理路径是优先检查点",
     "Tailscale exit path or DNS policy may be affecting access": "Tailscale 出口路径或 DNS 策略可能影响访问",
     "Local gateway or first-hop path instability": "本地网关或第一跳路径不稳定",

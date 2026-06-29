@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   diagnoseNetworkDoctor,
   normalizeNetworkDoctorEvidence,
+  scoreState,
   type DiagnosticDomain,
   type NetworkDoctorEvidence,
 } from "./network-doctor";
@@ -133,5 +134,26 @@ describe("Network Doctor evidence-based diagnosis", () => {
     expect(deep.modeProfile.targetDurationSeconds).toEqual([120, 300]);
     expect(deep.modeProfile.gatewaySampleTarget).toEqual([100, 200]);
     expect(normalizeNetworkDoctorEvidence(modules["../tests/fixtures/network-doctor/gateway-high-jitter.json"]).observations.gateway.sampleCount).toBeGreaterThanOrEqual(100);
+  });
+
+  it("keeps unknown unmapped from L7 for healthy ambiguous runs", () => {
+    const report = diagnoseNetworkDoctor(modules["../tests/fixtures/network-doctor/healthy-direct-ethernet.json"]);
+    expect(report.primaryFaultDomain).toBe("unknown");
+    expect(report.osiLayerMapping[0].layers).toEqual([]);
+  });
+
+  it("treats 220 ms system DNS as warning and labels mid scores acceptable", () => {
+    const report = diagnoseNetworkDoctor({
+      profile: "Slow system DNS",
+      observations: {
+        dns: {
+          resolverChecks: [
+            { name: "System DNS", address: "203.0.113.53", queryStatus: "ok", responseMs: 220, viaOverlay: true },
+          ],
+        },
+      },
+    });
+    expect(report.domainStatuses.find((item) => item.domain === "system_dns")?.status).toBe("warning");
+    expect(scoreState(68)).toBe("Acceptable");
   });
 });

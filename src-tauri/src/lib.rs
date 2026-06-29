@@ -1774,7 +1774,11 @@ fn dns_status_from_evidence(evidence: &serde_json::Value) -> &'static str {
         return "critical";
     }
     let gateway_dns = number_from_json(evidence, &["physicalLan", "gatewayDnsMs"]).unwrap_or(0.0);
+    let system_dns_slow = external_targets(evidence)
+        .iter()
+        .any(|target| target.get("dnsMs").and_then(serde_json::Value::as_f64).unwrap_or(0.0) >= 200.0);
     if gateway_dns > 100.0
+        || system_dns_slow
         || bool_from_json(evidence, &["overlay", "dnsViaOverlay"])
         || bool_from_json(evidence, &["overlay", "hasTailscaleDns100100"])
         || bool_from_json(evidence, &["overlay", "hasTailscaleIpv6Dns"])
@@ -1848,20 +1852,24 @@ fn exposed_local_service(evidence: &serde_json::Value) -> Option<String> {
 
 fn network_path_from_evidence(evidence: &serde_json::Value) -> String {
     let interface = string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "interface".to_string());
-    let gateway = string_from_json(evidence, &["physicalLan", "gatewayIp"]).unwrap_or_else(|| "gateway".to_string());
+    let local_ip = string_from_json(evidence, &["physicalLan", "ipv4"]);
+    let physical = local_ip
+        .map(|ip| format!("{interface} / {ip}"))
+        .unwrap_or(interface);
+    let gateway = string_from_json(evidence, &["physicalLan", "gatewayIp"]).unwrap_or_else(|| "gateway not identified".to_string());
     let default_route = string_from_json(evidence, &["overlay", "defaultRouteInterface"]).unwrap_or_default();
     if bool_from_json(evidence, &["overlay", "tailscaleRunning"])
         && bool_from_json(evidence, &["overlay", "tailscaleExitNode"])
     {
-        "Mac -> Tailscale / utun -> Exit Node -> Internet".to_string()
+        format!("Mac -> {physical} -> {gateway} -> Tailscale / {} -> Exit Node -> Internet", if default_route.is_empty() { "utun" } else { default_route.as_str() })
     } else if bool_from_json(evidence, &["overlay", "stashDetected"])
         && bool_from_json(evidence, &["overlay", "stashTunDetected"])
     {
-        "Mac -> Stash TUN / utun -> Proxy rules -> Proxy exit -> Internet".to_string()
+        format!("Mac -> {physical} -> {gateway} -> Stash TUN / {} -> Proxy exit -> Internet", if default_route.is_empty() { "utun" } else { default_route.as_str() })
     } else if default_route.starts_with("utun") {
-        "Mac -> Overlay / utun -> Remote path -> Internet".to_string()
+        format!("Mac -> {physical} -> {gateway} -> Overlay / {default_route} -> Remote path -> Internet")
     } else {
-        format!("Mac -> {interface} -> {gateway} -> ISP -> Internet")
+        format!("Mac -> {physical} -> {gateway} -> ISP -> Internet")
     }
 }
 
@@ -2085,14 +2093,25 @@ fn build_network_reliability_report(summary: &serde_json::Value, evidence: &serd
         })
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "- None".to_string());
+    let active_interface = string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "unknown".to_string());
+    let overlay_interface = string_from_json(evidence, &["overlay", "defaultRouteInterface"])
+        .filter(|value| value.starts_with("utun"))
+        .unwrap_or_else(|| "none".to_string());
+    let generated_at = string_from_json(evidence, &["generatedAt"]).unwrap_or_else(|| "unknown".to_string());
 
     format!(
-        "# Network Reliability Report\n\n## Overall Diagnosis\n\n{}\n\n## Current Network Path\n\n{}\n\n## Fault Point\n\n{}\n\n## Impact\n\n{}\n\n## Key Evidence\n\n{}\n\n## Troubleshooting Advice\n\n{}\n\n## Retest Plan\n\n{}\n\n## Physical LAN\n\n- Interface: {}\n- Gateway: {}\n- Gateway latency: {} ms\n\n## DNS\n\n- System DNS: {}\n- Gateway DNS: {} ms\n\n## Overlay / Proxy / VPN\n\n- Default route interface: {}\n- Overlay interfaces: {}\n\n## External Internet\n\n{}\n\n## Local Listening Services\n\n{}\n\n## Raw Evidence\n\n- network-environment-evidence.json\n",
+        "# Network Doctor Report\n\n## Run Metadata\n\n- resultMode: real\n- evidenceSource: local-collector\n- lastRunAt: {}\n- selectedInterface: {}\n- physicalInterface: {}\n- overlayInterface: {}\n\n## Overall Diagnosis\n\n{}\n\n## Current Network Path\n\n{}\n\n## Fault Point\n\n{}\n\n## Impact\n\n{}\n\n## Key Evidence\n\n{}\n\n## Root Cause Candidates\n\n- {}: {}\n\n## Evidence Against\n\n- Compare gateway, DNS, overlay, and application timing before assigning ownership.\n\n## Troubleshooting Advice\n\n{}\n\n## Retest Plan\n\n{}\n\n## Physical LAN\n\n- Interface: {}\n- Gateway: {}\n- Gateway latency: {} ms\n\n## DNS\n\n- System DNS: {}\n- Gateway DNS: {} ms\n\n## Overlay / Proxy / VPN\n\n- Default route interface: {}\n- Overlay interfaces: {}\n\n## External Internet\n\n{}\n\n## Local Listening Services\n\n{}\n\n## Raw Evidence\n\n- network-environment-evidence.json\n",
+        generated_at,
+        active_interface,
+        string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "unknown".to_string()),
+        overlay_interface,
         summary.get("overallStatus").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
         summary.get("currentPath").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
         summary.get("faultPoint").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
         summary.get("impact").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
         markdown_list(summary_items("evidence")),
+        summary.get("faultDomain").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+        summary.get("faultPoint").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
         markdown_list(summary_items("remediationAdvice")),
         markdown_list(summary_items("retestPlan")),
         string_from_json(evidence, &["physicalLan", "activeInterface"]).unwrap_or_else(|| "unknown".to_string()),
