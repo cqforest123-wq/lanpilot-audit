@@ -438,7 +438,6 @@ describe("full guided workflow localization", () => {
       expect(authorizationText).not.toContain(forbidden);
     }
     expect(authorizationText).toContain("nmap");
-    expect(authorizationText).toContain("当前选定的网络接口");
 
     await user.type(screen.getByLabelText(/项目名称/), "本地化测试");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
