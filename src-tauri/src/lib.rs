@@ -1859,10 +1859,10 @@ fn parse_curl_timing(url: &str, output: &CommandCapture) -> serde_json::Value {
 
 fn parse_dig_query_time_ms(output: &str) -> Option<u64> {
     output.lines().find_map(|line| {
-        let trimmed = line.trim();
-        trimmed
-            .strip_prefix("Query time:")
-            .and_then(|value| value.trim().strip_suffix("msec"))
+        let (_, value) = line.split_once("Query time:")?;
+        value
+            .trim()
+            .strip_suffix("msec")
             .and_then(|value| value.trim().parse::<u64>().ok())
     })
 }
