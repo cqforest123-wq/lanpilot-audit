@@ -39,7 +39,7 @@
     "checksums": "node scripts/checksums.mjs",
     "release:website": "node scripts/release-website.mjs",
     "notarize:check": "node scripts/sign-notarize.mjs --check",
-    "release:public": "npm run check && npm run app:build && node scripts/sign-notarize.mjs && npm run release:website",
+    "release:public": "npm run check && npm run app:build && node scripts/sign-notarize.mjs && npm run release:artifacts:verify && npm run release:website",
     "preview": "vite preview",
     "tauri": "tauri"
   },
