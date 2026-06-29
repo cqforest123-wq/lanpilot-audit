@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { supportedLocales, useI18n } from "./i18n";
+import { useI18n } from "./i18n";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
@@ -335,6 +335,7 @@ function OverviewPage({
         ]} />
       </div>
       <LatencyVisualization evidence={evidence} />
+      <RealCollectorDetails evidence={evidence} />
     </section>
   );
 }
@@ -1298,11 +1299,15 @@ function NetworkReliabilityResult({ result, resultMode, lastRunAt, lastRunMode, 
           [t("overview.localIp"), evidence.physicalLan.ipv4 ?? t("status.unknown")],
           [t("reliability.gateway"), evidence.physicalLan.gatewayIp ?? t("status.unknown")],
           [t("reliability.gatewayLatency"), formatNullableMs(evidence.physicalLan.gatewayPingAvgMs, t("status.unknown"))],
+          [t("reliability.gatewayP95"), formatNullableMs(evidence.physicalLan.gatewayPingP95Ms, t("status.unknown"))],
+          [t("reliability.gatewayP99"), formatNullableMs(evidence.physicalLan.gatewayPingP99Ms, t("status.unknown"))],
+          [t("reliability.gatewaySamples"), formatNullableCount(evidence.physicalLan.gatewayPingSampleCount, t("status.unknown"))],
         ]} judgement={summary.physicalLanStatus === "healthy" ? t("networkCheck.physicalHealthy") : localizeReliabilityText(summary.faultPoint, locale)} evidence={summary.evidence} advice={summary.remediationAdvice} />
         <DiagnosticSection title={t("networkCheck.dns")} status={summary.dnsStatus} metrics={[
           [t("overview.dhcpDns"), (evidence.physicalLan.dhcpDns ?? []).join(", ") || t("status.unknown")],
           [t("reliability.systemDns"), evidence.localControlPlane.systemDnsServers.join(", ") || t("status.unknown")],
           [t("overview.gatewayDns"), formatNullableMs(evidence.physicalLan.gatewayDnsMs, t("status.unknown"))],
+          [t("reliability.resolverChecks"), formatResolverChecks(evidence.localControlPlane.resolverChecks, t("status.unknown"), t)],
         ]} judgement={evidence.overlay.dnsViaOverlay ? t("overview.dnsTakenByOverlay") : t("overview.dnsDirect")} evidence={summary.evidence} advice={summary.remediationAdvice} />
         <DiagnosticSection title={t("networkCheck.overlay")} status={summary.overlayStatus} metrics={[
           [t("reliability.defaultRoute"), evidence.overlay.defaultRouteInterface ?? t("status.unknown")],
@@ -1333,6 +1338,48 @@ function NetworkReliabilityResult({ result, resultMode, lastRunAt, lastRunMode, 
         <p className="muted">{t("reliability.rawEvidenceDescription")}</p>
         <pre>{JSON.stringify({ summary: result.summary, evidence: result.evidence }, null, 2)}</pre>
       </details>
+    </div>
+  );
+}
+
+function RealCollectorDetails({ evidence }: { evidence: NetworkReliabilityEvidence }) {
+  const { t } = useI18n();
+  const unknown = t("status.unknown");
+  const pathNotice = evidence.physicalLan.iphoneHotspotLikely
+    ? t("reliability.hotspotPathNotice")
+    : evidence.physicalLan.selfAssignedAddress
+      ? t("reliability.selfAssignedPathNotice")
+      : evidence.physicalLan.networkPathNotice;
+  const resolverChecks = evidence.localControlPlane.resolverChecks ?? [];
+
+  return (
+    <div className="reliability-grid">
+      <section className="card compact">
+        <h2>{t("reliability.gatewayDistribution")}</h2>
+        {pathNotice && <p className="message">{pathNotice}</p>}
+        <dl className="report-metadata single-column">
+          <div><dt>{t("reliability.gatewayAvg")}</dt><dd>{formatNullableMs(evidence.physicalLan.gatewayPingAvgMs, unknown)}</dd></div>
+          <div><dt>{t("reliability.gatewayP95")}</dt><dd>{formatNullableMs(evidence.physicalLan.gatewayPingP95Ms, unknown)}</dd></div>
+          <div><dt>{t("reliability.gatewayP99")}</dt><dd>{formatNullableMs(evidence.physicalLan.gatewayPingP99Ms, unknown)}</dd></div>
+          <div><dt>{t("reliability.gatewayMax")}</dt><dd>{formatNullableMs(evidence.physicalLan.gatewayPingMaxMs, unknown)}</dd></div>
+          <div><dt>{t("reliability.gatewaySamples")}</dt><dd>{formatNullableCount(evidence.physicalLan.gatewayPingSampleCount, unknown)}</dd></div>
+        </dl>
+      </section>
+      <section className="card compact">
+        <h2>{t("reliability.dnsResolverChecks")}</h2>
+        {resolverChecks.length === 0 ? (
+          <p className="muted">{unknown}</p>
+        ) : (
+          <dl className="report-metadata single-column">
+            {resolverChecks.map((check, index) => (
+              <div key={`${check.address}-${index}`}>
+                <dt>{check.name || check.address}</dt>
+                <dd>{formatResolverCheck(check, unknown, t)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </section>
     </div>
   );
 }
@@ -1483,6 +1530,29 @@ function formatNullableMs(value: number | null | undefined, unknown: string): st
 
 function formatNullablePercent(value: number | null | undefined, unknown: string): string {
   return typeof value === "number" ? `${formatNumber(value)}%` : unknown;
+}
+
+function formatNullableCount(value: number | null | undefined, unknown: string): string {
+  return typeof value === "number" ? String(value) : unknown;
+}
+
+function formatResolverChecks(checks: NetworkReliabilityEvidence["localControlPlane"]["resolverChecks"], unknown: string, t: (key: string) => string): string {
+  if (!checks || checks.length === 0) return unknown;
+  return checks
+    .slice(0, 3)
+    .map((check) => formatResolverCheck(check, unknown, t))
+    .join(" · ");
+}
+
+function formatResolverCheck(check: NonNullable<NetworkReliabilityEvidence["localControlPlane"]["resolverChecks"]>[number], unknown: string, t: (key: string) => string): string {
+  const status = check.queryStatus ?? "not_tested";
+  const parts = [
+    check.address || unknown,
+    formatNullableMs(check.responseMs, unknown),
+    t(`reliability.resolverStatus.${status}`),
+  ];
+  if (check.viaOverlay) parts.push(t("reliability.viaOverlay"));
+  return parts.join(" · ");
 }
 
 function formatNumber(value: number): string {
@@ -1877,8 +1947,29 @@ function SettingsPage() {
 
 function LanguageSelector() {
   const { locale, setLocale, t } = useI18n();
-  const names: Record<Locale, string> = { en:"English","zh-CN":"简体中文","zh-TW":"繁體中文",ja:"日本語",ko:"한국어",de:"Deutsch",fr:"Français",es:"Español","pt-BR":"Português (Brasil)",it:"Italiano",nl:"Nederlands" };
-  return <label className="language-selector"><span>{t("language")}</span><select aria-label={t("language")} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>{supportedLocales.map((item) => <option value={item} key={item}>{names[item]}</option>)}</select></label>;
+  const visibleLocales = ["en", "zh-CN"] as const;
+  const names: Record<(typeof visibleLocales)[number], string> = {
+    en: "English",
+    "zh-CN": "简体中文",
+  };
+  const selectedLocale = visibleLocales.includes(locale as (typeof visibleLocales)[number])
+    ? locale
+    : "en";
+
+  return (
+    <label className="language-selector">
+      <span>{t("language")}</span>
+      <select
+        aria-label={t("language")}
+        value={selectedLocale}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+      >
+        {visibleLocales.map((item) => (
+          <option value={item} key={item}>{names[item]}</option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {

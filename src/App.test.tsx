@@ -293,7 +293,7 @@ describe("localization", () => {
     await screen.findByText("Engine: Ready");
     await user.type(screen.getByLabelText(/Project name/), "Persistent project");
     await user.click(screen.getAllByRole("checkbox")[0]);
-    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "ja");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-CN");
     expect(screen.getByDisplayValue("Persistent project")).toBeVisible();
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   });
@@ -407,21 +407,20 @@ describe("localized report view", () => {
     expect(screen.getByText("原始证据按生成时的原文保留。")).toBeVisible();
   });
 
-  it("updates the localized report to Japanese while raw evidence remains unchanged", async () => {
-    localStorage.setItem("lanpilot.locale", "zh-CN");
+  it("keeps the localized report in Chinese while raw evidence remains unchanged", async () => {
+    localStorage.setItem("lanpilot.locale", "en");
     invokeMock.mockResolvedValue(localizedReportFixture);
     const user = userEvent.setup();
     render(<I18nProvider><App /></I18nProvider>);
 
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-CN");
     await user.click(screen.getByRole("button", { name: "报告" }));
     await screen.findByText("管理摘要");
-    await user.selectOptions(screen.getByRole("combobox", { name: "语言" }), "ja");
-    expect(screen.getByText("エグゼクティブサマリー")).toBeVisible();
-    expect(screen.getByText("同一クライアントネットワーク位置から SMB サービスに到達できます。")).toBeVisible();
-    expect(screen.queryByText("Risk Register")).not.toBeInTheDocument();
+    expect(screen.getByText("管理摘要")).toBeVisible();
 
-    await user.click(screen.getByRole("tab", { name: "原始証跡" }));
+    await user.click(screen.getByRole("tab", { name: "原始证据" }));
     expect(screen.getByText(/This report summarizes authorized network governance observations/)).toBeVisible();
+    expect(screen.getByText("原始证据按生成时的原文保留。")).toBeVisible();
   });
 });
 

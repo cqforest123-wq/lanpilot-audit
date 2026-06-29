@@ -26,20 +26,41 @@ export interface PhysicalLanEvidence {
   dhcpLeaseSeconds?: number | null;
   gatewayIp?: string | null;
   gatewayPingLossPct?: number | null;
+  gatewayPingMinMs?: number | null;
   gatewayPingAvgMs?: number | null;
+  gatewayPingMaxMs?: number | null;
+  gatewayPingStddevMs?: number | null;
   gatewayPingJitterMs?: number | null;
+  gatewayPingP50Ms?: number | null;
+  gatewayPingP95Ms?: number | null;
+  gatewayPingP99Ms?: number | null;
+  gatewayPingSamplesMs?: number[];
   gatewayPingSampleCount?: number | null;
   gatewayDnsMs?: number | null;
   gatewayDnsTimedOut?: boolean;
   arpSummary?: string;
   selfAssignedAddress?: boolean;
+  iphoneHotspotLikely?: boolean;
+  networkPathNotice?: string | null;
   multipleActiveInterfaces?: boolean;
+}
+
+export type ResolverQueryStatus = "ok" | "timeout" | "failed" | "not_tested";
+
+export interface ResolverCheck {
+  name: string;
+  address: string;
+  queryStatus: ResolverQueryStatus;
+  responseMs?: number | null;
+  resolvedIp?: string | null;
+  viaOverlay?: boolean;
 }
 
 export interface LocalControlPlaneEvidence {
   systemDnsServers: string[];
   scopedResolvers: string[];
   resolverSummary: string;
+  resolverChecks?: ResolverCheck[];
   mdnsSummary?: string;
   listeningServices: ListeningService[];
 }

@@ -1464,3 +1464,45 @@ const reliabilityV171Messages: Record<Locale, Messages> = {
 for (const locale of Object.keys(reliabilityV171Messages) as Locale[]) {
   Object.assign(networkReliabilityMessages[locale], reliabilityV171Messages[locale]);
 }
+
+const reliabilityV180Messages: Partial<Record<Locale, Messages>> = {
+  en: {
+    "reliability.gatewayDistribution": "Gateway latency distribution",
+    "reliability.gatewayAvg": "Gateway average",
+    "reliability.gatewayP95": "Gateway P95",
+    "reliability.gatewayP99": "Gateway P99",
+    "reliability.gatewayMax": "Gateway max",
+    "reliability.gatewaySamples": "Gateway samples",
+    "reliability.dnsResolverChecks": "DNS resolver checks",
+    "reliability.resolverChecks": "Resolver checks",
+    "reliability.resolverStatus.ok": "OK",
+    "reliability.resolverStatus.timeout": "Timeout",
+    "reliability.resolverStatus.failed": "Failed",
+    "reliability.resolverStatus.not_tested": "Not tested",
+    "reliability.viaOverlay": "via overlay",
+    "reliability.hotspotPathNotice": "This appears to be an iPhone hotspot or USB network path. Results may reflect mobile network, hotspot NAT, or carrier routing rather than a fixed home router path.",
+    "reliability.selfAssignedPathNotice": "The active interface has a self-assigned 169.254.x.x IPv4 address. Check DHCP, local link, Wi-Fi association, adapter, or switch path before external tests."
+  },
+  "zh-CN": {
+    "reliability.gatewayDistribution": "网关延迟分布",
+    "reliability.gatewayAvg": "网关平均延迟",
+    "reliability.gatewayP95": "网关 P95",
+    "reliability.gatewayP99": "网关 P99",
+    "reliability.gatewayMax": "网关最大延迟",
+    "reliability.gatewaySamples": "网关样本数",
+    "reliability.dnsResolverChecks": "DNS 解析器检测",
+    "reliability.resolverChecks": "解析器检测",
+    "reliability.resolverStatus.ok": "正常",
+    "reliability.resolverStatus.timeout": "超时",
+    "reliability.resolverStatus.failed": "失败",
+    "reliability.resolverStatus.not_tested": "未测试",
+    "reliability.viaOverlay": "经由 Overlay",
+    "reliability.hotspotPathNotice": "当前可能是 iPhone 热点或 USB 网络路径。结果可能反映移动网络、热点 NAT 或运营商路径，而不是固定家庭路由器路径。",
+    "reliability.selfAssignedPathNotice": "当前接口使用 169.254.x.x 自分配 IPv4 地址。外部测试前，应先检查 DHCP、本地链路、Wi-Fi 关联、网卡或交换机路径。"
+  }
+};
+
+for (const locale of Object.keys(networkReliabilityMessages) as Locale[]) {
+  Object.assign(networkReliabilityMessages[locale], reliabilityV180Messages[locale] ?? reliabilityV180Messages.en);
+}
+
