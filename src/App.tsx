@@ -1967,6 +1967,11 @@ function LanguageSelector() {
         {visibleLocales.map((item) => (
           <option value={item} key={item}>{names[item]}</option>
         ))}
+        {supportedLocales
+          .filter((item) => !visibleLocales.includes(item as (typeof visibleLocales)[number]))
+          .map((item) => (
+            <option value={item} key={item} hidden>{item}</option>
+          ))}
       </select>
     </label>
   );
