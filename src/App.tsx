@@ -537,24 +537,17 @@ function AuthorizationPage({
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [error, setError] = useState("");
   const [projectName, setProjectName] = useState("");
-  const [site, setSite] = useState("");
-  const [notes, setNotes] = useState("");
-  const [checks, setChecks] = useState([false, false, false, false, false]);
-  const allChecked = checks.every(Boolean);
+  const [confirmed, setConfirmed] = useState(false);
   const engineReady = Boolean(engine && (engine.scriptsReady || !engine.engineFound));
 
   useEffect(() => {
     invoke<EngineStatus>("check_engine").then(setEngine).catch((value) => setError(errorMessage(value)));
   }, []);
 
-  const toggleCheck = (index: number, checked: boolean) => {
-    setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? checked : value));
-  };
-
   const submit = async () => {
     setError("");
     try {
-      await onConfirm({ projectName: projectName.trim(), site: site.trim(), notes: notes.trim() });
+      await onConfirm({ projectName: projectName.trim(), site: "", notes: "" });
     } catch (value) {
       setError(errorMessage(value));
     }
@@ -565,8 +558,6 @@ function AuthorizationPage({
       <PageHeading eyebrow={t("authorization.requiredBeforeEveryRealAudit")} title={t("authorization.title")} description={t("authorization.description")} />
       <div className="form-grid">
         <label>{t("authorization.projectName")} <strong>*</strong><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
-        <label>{t("authorization.siteOrganization")}<input value={site} onChange={(event) => setSite(event.target.value)} /></label>
-        <label className="full-width">{t("authorization.notes")}<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
       </div>
       <div className="card compact">
         <h2>{t("authorization.localEngineReadiness")}</h2>
@@ -582,22 +573,14 @@ function AuthorizationPage({
         {engine?.warnings.map((warning) => <RawDetail detail={warning} warning key={warning} />)}
       </div>
       <div className="confirmation-list">
-        {[
-          t("authorization.confirmAssessNetwork"),
-          t("authorization.confirmOnlyApprovedScripts"),
-          t("authorization.confirmNoOffensiveActions"),
-          t("authorization.confirmPointInTimeNoConfigChange"),
-          t("authorization.confirmCurrentInterface"),
-        ].map((label, index) => (
-          <label className="confirmation card compact" key={label}>
-            <input type="checkbox" checked={checks[index]} onChange={(event) => toggleCheck(index, event.target.checked)} />
-            <span><strong>{label}</strong></span>
-          </label>
-        ))}
+        <label className="confirmation card compact">
+          <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+          <span><strong>{t("authorization.confirmAssessNetwork")}</strong></span>
+        </label>
       </div>
       {error && <RawDetail detail={error} />}
       <div className="actions">
-        <button className="primary" type="button" disabled={!allChecked || !projectName.trim() || !engineReady} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
+        <button className="primary" type="button" disabled={!confirmed || !projectName.trim() || !engineReady} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
         <button className="secondary" type="button" onClick={onCancel}>{t("authorization.cancel")}</button>
       </div>
     </section>
