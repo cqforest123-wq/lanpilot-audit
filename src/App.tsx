@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { supportedLocales, useI18n } from "./i18n";
+import { useI18n } from "./i18n";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
@@ -1967,11 +1967,6 @@ function LanguageSelector() {
         {visibleLocales.map((item) => (
           <option value={item} key={item}>{names[item]}</option>
         ))}
-        {supportedLocales
-          .filter((item) => !visibleLocales.includes(item as (typeof visibleLocales)[number]))
-          .map((item) => (
-            <option value={item} key={item} hidden>{item}</option>
-          ))}
       </select>
     </label>
   );
