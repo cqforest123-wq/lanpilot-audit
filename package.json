@@ -41,7 +41,9 @@
     "notarize:check": "node scripts/sign-notarize.mjs --check",
     "release:public": "npm run check && npm run app:build && node scripts/sign-notarize.mjs && npm run release:prepare && npm run release:artifacts:verify && npm run release:website",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "app:build:appstore": "npm run tauri -- build --config src-tauri/tauri.appstore.conf.json",
+    "sandbox:verify": "node scripts/verify-sandbox.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -119,7 +119,7 @@ describe("network reliability diagnostics", () => {
     const english = buildNetworkReliabilityMarkdown(diagnosis, healthyDirectFixture, "en");
     const chinese = buildNetworkReliabilityMarkdown(diagnosis, healthyDirectFixture, "zh-CN");
     for (const heading of [
-      "# Network Doctor Report",
+      "# Path Report",
       "## Run Metadata",
       "## Overall Diagnosis",
       "## Current Network Path",
@@ -140,7 +140,7 @@ describe("network reliability diagnostics", () => {
     expect(english).toContain("- resultMode: real");
     expect(english).toContain("- evidenceSource: local-collector");
     for (const heading of [
-      "# 网络医生报告",
+      "# 链路报告",
       "## 运行元数据",
       "## 总体诊断",
       "## 当前网络路径",

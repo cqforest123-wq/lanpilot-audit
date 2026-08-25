@@ -1,3 +1,5 @@
+pub mod quick_check;
+
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -3108,6 +3110,173 @@ fn collect_network_reliability(
 }
 
 #[tauri::command]
+fn read_local_network() -> quick_check::netinfo::LocalNetwork {
+    quick_check::netinfo::snapshot()
+}
+
+/// Kept out of `read_local_network` on purpose: this one waits on two DNS
+/// round trips, and the overview must paint immediately rather than block on
+/// the network.
+#[tauri::command]
+async fn read_public_egress() -> Result<quick_check::egress::Egress, String> {
+    tauri::async_runtime::spawn_blocking(quick_check::egress::lookup)
+        .await
+        .map_err(|error| format!("Egress worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn run_traceroute(
+    app: tauri::AppHandle,
+    target: String,
+    resolve_names: bool,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::traceroute::Trace, String> {
+    let address = quick_check::runner::resolve_raw(&target)?;
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::traceroute::run(address, resolve_names, |hop| {
+            let _ = app.emit("quick-check-hop", hop);
+        })
+    })
+    .await
+    .map_err(|error| format!("Traceroute worker failed: {error}"))?
+}
+
+#[tauri::command]
+async fn check_tcp_port(target: String, port: u16) -> Result<quick_check::port::PortResult, String> {
+    // Port 0 is not a service; refuse it rather than reporting a meaningless result.
+    if port == 0 {
+        return Err("target:notHostnameOrIp".to_string());
+    }
+    let address = quick_check::runner::resolve_raw(&target)?;
+    tauri::async_runtime::spawn_blocking(move || quick_check::port::check(address, port))
+        .await
+        .map_err(|error| format!("Port worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn diagnose_dns(name: String) -> Result<quick_check::dns::DnsDiagnosis, String> {
+    // Reuse the same whitelist: only a real host name is worth resolving.
+    match quick_check::target::parse_target(&name) {
+        Ok(quick_check::target::QuickTarget::Hostname(host)) => {
+            tauri::async_runtime::spawn_blocking(move || {
+                let servers: Vec<std::net::Ipv4Addr> = quick_check::netinfo::dns_servers()
+                    .iter()
+                    .filter_map(|server| server.parse().ok())
+                    .collect();
+                quick_check::dns::diagnose(&host, &servers)
+            })
+            .await
+            .map_err(|error| format!("DNS worker failed: {error}"))
+        }
+        // An IP literal needs no lookup; saying so beats a confusing empty result.
+        Ok(quick_check::target::QuickTarget::Ip(_)) => Err("dns:alreadyAnAddress".to_string()),
+        Err(error) => Err(format!("target:{}", error.code())),
+    }
+}
+
+/// Cancellation flag for the running watch, shared with the UI's stop button.
+#[derive(Default)]
+struct WatchState {
+    active: AtomicBool,
+}
+
+#[tauri::command]
+fn stop_watch(watch: tauri::State<'_, WatchState>) {
+    watch.active.store(false, Ordering::SeqCst);
+}
+
+#[tauri::command]
+async fn start_watch(
+    app: tauri::AppHandle,
+    target: String,
+    interval_ms: u64,
+    watch: tauri::State<'_, WatchState>,
+) -> Result<quick_check::monitor::WatchSummary, String> {
+    let address = quick_check::runner::resolve_raw(&target)?;
+
+    // Clamp rather than trust: the interval reaches a send loop, so a small
+    // value from a modified front end must not become a packet flood.
+    let interval = std::time::Duration::from_millis(interval_ms.clamp(500, 60_000));
+
+    if watch.active.swap(true, Ordering::SeqCst) {
+        return Err("watch:alreadyRunning".to_string());
+    }
+
+    let result = tauri::async_runtime::spawn_blocking({
+        let app = app.clone();
+        move || run_watch_loop(&app, address, interval)
+    })
+    .await
+    .map_err(|error| format!("Watch worker failed: {error}"));
+
+    app.state::<WatchState>().active.store(false, Ordering::SeqCst);
+    result?
+}
+
+fn run_watch_loop(
+    app: &tauri::AppHandle,
+    address: std::net::IpAddr,
+    interval: std::time::Duration,
+) -> Result<quick_check::monitor::WatchSummary, String> {
+    use quick_check::icmp::{PingSocket, ProbeOutcome};
+
+    let socket = PingSocket::open(address).map_err(|error| format!("socketFailed:{error}"))?;
+    let started = Instant::now();
+    let mut ticks = Vec::new();
+    let mut sequence: u16 = 0;
+
+    while app.state::<WatchState>().active.load(Ordering::SeqCst) {
+        sequence = sequence.wrapping_add(1);
+        let at_ms = started.elapsed().as_millis() as u64;
+
+        let rtt_ms = match socket.probe(address, sequence, std::time::Duration::from_millis(1500)) {
+            Ok(ProbeOutcome::Reply { rtt, .. }) => {
+                Some((rtt.as_secs_f64() * 100_000.0).round() / 100.0)
+            }
+            Ok(_) => None,
+            Err(error) => return Err(format!("probeFailed:{error}")),
+        };
+
+        ticks.push(quick_check::monitor::Tick { at_ms, rtt_ms });
+        let _ = app.emit("quick-check-watch", (at_ms, rtt_ms));
+
+        // Wake often so Stop feels immediate even on a long interval.
+        let deadline = Instant::now() + interval;
+        while Instant::now() < deadline {
+            if !app.state::<WatchState>().active.load(Ordering::SeqCst) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100).min(interval));
+        }
+    }
+
+    Ok(quick_check::monitor::summarize(&ticks))
+}
+
+#[tauri::command]
+async fn run_quick_check(
+    app: tauri::AppHandle,
+    target: String,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::runner::QuickCheckReport, String> {
+    // No authorization ceremony: the user typing an address and pressing the
+    // button *is* the intent, exactly as in Apple's own Network Utility. The
+    // guard only stops two runs overlapping on the same sockets.
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::runner::run(&target, |event| {
+            // A dropped event only costs a chart point; never fail the run for it.
+            let _ = app.emit("quick-check-probe", event);
+        })
+    })
+    .await
+    .map_err(|error| format!("Quick check worker failed: {error}"))?
+}
+
+#[tauri::command]
 async fn run_network_reliability_check(
     mode: Option<String>,
     execution_state: tauri::State<'_, AuditExecutionState>,
@@ -3153,6 +3322,7 @@ async fn export_latest_lab_zip() -> Result<ExportResult, String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(AuditExecutionState::default())
+        .manage(WatchState::default())
         .invoke_handler(tauri::generate_handler![
             check_engine,
             install_bundled_engine,
@@ -3161,6 +3331,14 @@ pub fn run() {
             run_audit_step,
             run_full_audit,
             run_network_reliability_check,
+            run_quick_check,
+            read_local_network,
+            read_public_egress,
+            check_tcp_port,
+            run_traceroute,
+            diagnose_dns,
+            start_watch,
+            stop_watch,
             read_latest_report,
             read_remediation_tracking,
             save_remediation_tracking,

@@ -212,7 +212,7 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
 
-  it("runs the fixed Network Doctor Quick Check only after local authorization", async () => {
+  it("runs the fixed Path Report check only after local authorization", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "authorize_audit") return Promise.resolve();
       if (command === "list_audit_interfaces") return Promise.resolve([{ name: "en0", ipv4: "192.0.2.20" }, { name: "utun15", ipv4: "198.18.0.1" }]);
@@ -223,9 +223,10 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("button", { name: "Quick Check" }));
+    await user.click(screen.getByRole("tab", { name: "Full path" }));
     await user.click(screen.getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Run Quick Check" }));
+    await user.click(screen.getByRole("button", { name: "Run Network Check" }));
 
     expect(await screen.findByText("Network path view")).toBeVisible();
     expect(screen.getAllByText("Gateway").length).toBeGreaterThan(0);
@@ -233,7 +234,7 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
 
-  it("keeps Network Doctor demo data behind an explicit demo action", async () => {
+  it("keeps Path Report demo data behind an explicit demo action", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "list_audit_interfaces") return Promise.resolve([{ name: "en6", ipv4: "172.20.10.7" }]);
       return Promise.resolve(engineStatus);
@@ -241,9 +242,10 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("button", { name: "Quick Check" }));
+    await user.click(screen.getByRole("tab", { name: "Full path" }));
 
-    expect(await screen.findByText("No real Network Doctor run yet")).toBeVisible();
+    expect(await screen.findByText("No real Path Report run yet")).toBeVisible();
     expect(screen.queryByText("Demo Proxy Exit")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "View demo result" }));
     expect(await screen.findByText(/Demo mode: synthetic example data is shown/)).toBeVisible();
@@ -260,7 +262,8 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("button", { name: "Quick Check" }));
+    await user.click(screen.getByRole("tab", { name: "Full path" }));
 
     expect(await screen.findByText("Current auto selection: en6")).toBeVisible();
     expect(screen.getByText("Self-assigned address")).toBeVisible();

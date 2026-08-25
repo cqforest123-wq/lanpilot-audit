@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required for the Mac App Store. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Outbound connections: TCP port checks and DNS queries. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Required for ICMP and UDP, not because the app listens for anything.
+	     Both are connectionless, so the sandbox treats the arriving echo reply
+	     or DNS response as inbound traffic and denies it with network-outbound
+	     errors unless this is also present. Quick Check opens no listening
+	     socket and accepts no incoming connection. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>

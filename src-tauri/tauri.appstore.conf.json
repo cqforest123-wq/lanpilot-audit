@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LANPilot Audit",
+  "identifier": "com.litao.lanpilotaudit",
+  "bundle": {
+    "targets": [
+      "app"
+    ],
+    "resources": null,
+    "macOS": {
+      "entitlements": "entitlements/appstore.entitlements",
+      "signingIdentity": "-"
+    }
+  }
+}

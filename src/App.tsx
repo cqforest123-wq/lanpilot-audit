@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useI18n } from "./i18n";
+import { QuickCheckPanel } from "./QuickCheckPanel";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
@@ -11,7 +12,7 @@ import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type Doc
 import packageJson from "../package.json";
 import "./App.css";
 
-type Page = "overview" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "networkCheck" | "report" | "compare" | "remediation" | "export" | "settings";
+type Page = "overview" | "quickCheck" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
 type StepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 type AuditStepId =
   | "init_lab"
@@ -195,7 +196,7 @@ function App() {
         </button>
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
           <NavButton active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
-          <NavButton active={page === "networkCheck"} disabled={auditRunning} onClick={() => navigate("networkCheck")} label={t("navNetworkCheck")} />
+          <NavButton active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
           <NavButton active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
           <NavButton active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
           <NavButton active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
@@ -221,7 +222,7 @@ function App() {
         {page === "overview" && (
           <OverviewPage
             result={networkResult}
-            onNetworkCheck={() => navigate("networkCheck")}
+            onNetworkCheck={() => navigate("quickCheck")}
             onGovernanceAudit={startAuthorization}
           />
         )}
@@ -256,7 +257,12 @@ function App() {
         {page === "report" && <ReportPage initialReport={latestReport} />}
         {page === "assets" && <GovernanceDataPage titleKey="toolbox.assets" descriptionKey="toolbox.assetsDescription" fields={["assetInventorySummary", "assetInventory", "localNetworkConfig"]} />}
         {page === "exposure" && <GovernanceDataPage titleKey="toolbox.exposure" descriptionKey="toolbox.exposureDescription" fields={["serviceExposureSummary", "serviceExposureMatrix", "mdnsServices", "webBaseline", "tlsCertificates"]} />}
-        {page === "networkCheck" && <NetworkReliabilityPage onRunningChange={setAuditRunning} onComplete={setNetworkResult} />}
+        {page === "quickCheck" && (
+          <QuickCheckPanel
+            onRunningChange={setAuditRunning}
+            deepReport={<NetworkReliabilityPage onRunningChange={setAuditRunning} onComplete={setNetworkResult} />}
+          />
+        )}
         {page === "compare" && <GovernanceDataPage titleKey="toolbox.compare" descriptionKey="toolbox.compareDescription" fields={["snapshotDiff", "governanceSummary"]} />}
         {page === "remediation" && <RemediationPage onRetest={startAuthorization} />}
         {page === "export" && <ExportPage />}
@@ -1081,7 +1087,7 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
     setMessage("");
     setResult(null);
     try {
-      await invoke("authorize_audit", { projectName: mode === "quick" ? "Network Doctor Quick Check" : "Network Doctor Deep Diagnosis" });
+      await invoke("authorize_audit", { projectName: mode === "quick" ? "Path Report Quick Check" : "Path Report Deep Diagnosis" });
       const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check", { mode });
       const completed = { ...next, doctorMode: mode };
       setResult(completed);
@@ -1143,7 +1149,7 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
           <span><strong>{t("reliability.lightConfirmCheck")}</strong></span>
         </label>
         <div className="actions">
-          <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : mode === "quick" ? t("button.startNetworkCheck") : t("reliability.deepDiagnosis")}</button>
+          <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : mode === "quick" ? t("reliability.run") : t("reliability.deepDiagnosis")}</button>
         </div>
       </section>
       <NetworkInterfaceSelector interfaces={interfaces} selected={selectedInterface} onSelect={setSelectedInterface} mode="reliability" />
