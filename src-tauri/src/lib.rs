@@ -3124,6 +3124,15 @@ async fn read_public_egress() -> Result<quick_check::egress::Egress, String> {
         .map_err(|error| format!("Egress worker failed: {error}"))
 }
 
+/// Async and separate from the overview for the same reason as the egress
+/// lookup: it waits on the network, and the screen must not.
+#[tauri::command]
+async fn check_clock() -> Result<quick_check::ntp::ClockCheck, String> {
+    tauri::async_runtime::spawn_blocking(quick_check::ntp::best_available)
+        .await
+        .map_err(|error| format!("Clock worker failed: {error}"))
+}
+
 #[tauri::command]
 async fn run_traceroute(
     app: tauri::AppHandle,
@@ -3334,6 +3343,7 @@ pub fn run() {
             run_quick_check,
             read_local_network,
             read_public_egress,
+            check_clock,
             check_tcp_port,
             run_traceroute,
             diagnose_dns,

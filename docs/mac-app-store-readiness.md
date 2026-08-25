@@ -44,6 +44,8 @@ Measured on macOS (Darwin 25.5, Apple silicon), all sandboxed:
 | UDP bind and DNS query | works |
 | CoreWLAN radio read (RSSI/noise/rate) | works, no Location prompt |
 | Public egress lookup over DNS | works |
+| NTP clock check over UDP/123 | works |
+| Traceroute TTL sweep | works |
 
 **The `network.server` entitlement is load-bearing.** With
 `network.client` alone, the same probe fails:
@@ -97,6 +99,11 @@ prompt and never learns the user's location.
 The public-address feature uses two ordinary DNS queries to public resolvers
 that answer with the querying address. It is not an HTTP request and sends no
 user data.
+
+Clock accuracy is checked with an ordinary NTP client request to the same public
+time servers macOS uses. The app reads the system clock and never sets it. This
+is included because a drifted clock presents as a network fault: certificates
+appear invalid and two-factor codes are rejected.
 
 It does not scan address ranges, enumerate hosts, sweep ports, or test
 credentials. Ports are tested one at a time and only when named or picked by the

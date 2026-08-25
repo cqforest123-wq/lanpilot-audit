@@ -13,6 +13,7 @@ type DnsVerdict = "consistent" | "syntheticAnswer" | "divergent" | "inconclusive
 type Tool = "ping" | "port" | "route" | "dns" | "watch" | "deep";
 type SignalQuality = "excellent" | "good" | "fair" | "weak" | "unusable";
 type EgressVerdict = "confirmed" | "split" | "intercepted" | "unknown";
+type ClockVerdict = "accurate" | "drifting" | "wrong" | "unreachable" | "imprecise";
 
 interface ProbeStats {
   sent: number; received: number; lossPct: number;
@@ -35,6 +36,10 @@ interface WifiStatus {
 }
 interface Egress {
   primary: string | null; secondary: string | null; verdict: EgressVerdict; reasons: string[];
+}
+interface ClockCheck {
+  server: string; offsetMs: number | null; roundTripMs: number | null;
+  uncertaintyMs: number | null; verdict: ClockVerdict; reasons: string[];
 }
 interface LocalNetwork {
   interfaces: NetInterface[]; dnsServers: string[]; gateway: string | null; tunnels: string[];
@@ -155,6 +160,21 @@ function useErrorText() {
 
 /* Overview ---------------------------------------------------------------- */
 
+/**
+ * Scale a clock offset to a unit a person can read.
+ * "+412000 ms" is technically the offset and tells nobody they are seven
+ * minutes out.
+ */
+function formatOffset(offsetMs: number, t: (key: string, params?: Record<string, string>) => string) {
+  const sign = offsetMs > 0 ? "+" : "-";
+  const magnitude = Math.abs(offsetMs);
+  if (magnitude < 1000) return `${sign}${Math.round(magnitude)} ms`;
+  if (magnitude < 90_000) return `${sign}${(magnitude / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(magnitude / 60_000);
+  const seconds = Math.round((magnitude % 60_000) / 1000);
+  return `${sign}${t("quickCheck.clockMinutes", { minutes: String(minutes), seconds: String(seconds) })}`;
+}
+
 /** Four bars, because a dBm number means nothing to most people. */
 function SignalBars({ quality }: { quality: SignalQuality | null }) {
   const filled: Record<SignalQuality, number> = {
@@ -170,10 +190,11 @@ function SignalBars({ quality }: { quality: SignalQuality | null }) {
   );
 }
 
-function Overview({ data, egress, egressLoading }: {
+function Overview({ data, egress, egressLoading, clock }: {
   data: LocalNetwork | null;
   egress: Egress | null;
   egressLoading: boolean;
+  clock: ClockCheck | null;
 }) {
   const { t } = useI18n();
   if (!data) return <p className="qc-loading">{t("quickCheck.loadingOverview")}</p>;
@@ -214,12 +235,34 @@ function Overview({ data, egress, egressLoading }: {
           tone={egress?.verdict === "split" || egress?.verdict === "intercepted" ? "warn" : undefined}
         />
         <Metric
+          label={t("quickCheck.ovClock")}
+          value={
+            clock === null ? "…"
+              : clock.verdict === "unreachable" ? "—"
+              : clock.verdict === "imprecise" ? t("quickCheck.clockImprecise")
+              : formatOffset(clock.offsetMs ?? 0, t)
+          }
+          hint={clock ? t(`quickCheck.clockVerdict.${clock.verdict}`) : undefined}
+          tone={clock?.verdict === "wrong" ? "warn" : undefined}
+        />
+        <Metric
           label={t("quickCheck.ovTunnels")}
           value={tunnels.length === 0 ? t("quickCheck.ovNone") : String(tunnels.length)}
           hint={tunnels.join(", ") || undefined}
           tone={tunnels.length > 0 ? "warn" : undefined}
         />
       </div>
+
+      {clock && clock.verdict === "wrong" ? (
+        <div className="qc-banner qc-banner-alert" role="alert">
+          <strong>{t("quickCheck.clockWrongTitle")}</strong>
+          <p>{t("quickCheck.clockWrongBody", {
+            amount: formatOffset(Math.abs(clock.offsetMs ?? 0), t).replace(/^[+-]/, ""),
+            direction: t(`quickCheck.clock.${(clock.offsetMs ?? 0) > 0 ? "behind" : "ahead"}`),
+          })}</p>
+          <ul>{clock.reasons.map((reason) => <li key={reason}>{t(`quickCheck.clockReason.${reason}`)}</li>)}</ul>
+        </div>
+      ) : null}
 
       {wifi && wifi.quality ? (
         <div className={`qc-wifi qc-wifi-${wifi.quality}`}>
@@ -743,6 +786,7 @@ export function QuickCheckPanel({
   const [network, setNetwork] = useState<LocalNetwork | null>(null);
   const [egress, setEgress] = useState<Egress | null>(null);
   const [egressLoading, setEgressLoading] = useState(true);
+  const [clock, setClock] = useState<ClockCheck | null>(null);
 
   // The full-path report shells out, which App Sandbox forbids. Offering a tab
   // that can only fail is worse than not offering it.
@@ -762,6 +806,19 @@ export function QuickCheckPanel({
         if (active) setNetwork(snapshot);
       } catch {
         if (active) setNetwork(null);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const reading = await invoke<ClockCheck>("check_clock");
+        if (active) setClock(reading);
+      } catch {
+        if (active) setClock(null);
       }
     })();
     return () => { active = false; };
@@ -792,7 +849,7 @@ export function QuickCheckPanel({
       <h2>{t("quickCheck.title")}</h2>
       <p className="qc-lede">{t("quickCheck.description")}</p>
 
-      <Overview data={network} egress={egress} egressLoading={egressLoading} />
+      <Overview data={network} egress={egress} egressLoading={egressLoading} clock={clock} />
 
       <div className="qc-tabs" role="tablist">
         {tools.map((entry) => (

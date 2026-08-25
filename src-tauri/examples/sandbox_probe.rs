@@ -7,7 +7,7 @@
 use std::net::{IpAddr, TcpStream, SocketAddr, UdpSocket};
 use std::time::Duration;
 
-use lanpilot_audit_app_lib::quick_check::{dns, egress, icmp, netinfo, port, route, wifi};
+use lanpilot_audit_app_lib::quick_check::{dns, egress, icmp, netinfo, ntp, port, route, traceroute, wifi};
 
 fn line(label: &str, ok: bool, detail: String) {
     println!("  [{}] {:<34} {}", if ok { "PASS" } else { "FAIL" }, label, detail);
@@ -75,6 +75,18 @@ fn main() {
     let seen = egress::lookup();
     line("egress probes", seen.verdict != egress::EgressVerdict::Unknown,
          format!("{:?} primary={:?} secondary={:?}", seen.verdict, seen.primary, seen.secondary));
+
+    println!("\n=== 7. NTP clock check (UDP/123) ===");
+    let clock = ntp::best_available();
+    line("time server exchange", clock.verdict != ntp::ClockVerdict::Unreachable,
+         format!("{} offset={:?} rtt={:?} {:?}", clock.server, clock.offset_ms, clock.round_trip_ms, clock.verdict));
+
+    println!("\n=== 8. Traceroute (TTL sweep) ===");
+    match traceroute::run("1.1.1.1".parse().unwrap(), false, |_| {}) {
+        Ok(trace) => line("hop sweep", !trace.hops.is_empty(),
+                          format!("{:?}, {} hops, implausible={}", trace.outcome, trace.hops.len(), trace.implausibly_short)),
+        Err(error) => line("hop sweep", false, error),
+    }
 
     println!("\n=== verdict ===");
     println!("  Sandbox enforcing : {}", if contained { "yes" } else { "NO" });

@@ -6,6 +6,7 @@ pub mod icmp;
 pub mod interference;
 pub mod monitor;
 pub mod netinfo;
+pub mod ntp;
 pub mod port;
 pub mod route;
 pub mod runner;

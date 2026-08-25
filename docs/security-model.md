@@ -44,6 +44,13 @@ code, so it is also the most tightly bounded.
 - **DNS** — one standard A query per resolver over UDP/53, sent only to the
   resolvers macOS is already configured to use plus one fixed public reference.
   Responses are matched on the query ID before being read.
+- **Route** — the same ICMP echo, sent with a deliberately small hop limit and
+  raised one step at a time, capped at 30 hops. Hop names come from
+  `getnameinfo`, which uses the system resolver and its cache rather than
+  generating extra DNS traffic.
+- **Clock** — one standard NTP client request per time server over UDP/123, to
+  the same public servers macOS itself uses. Nothing is set or changed; the
+  system clock is read, never written.
 - **Monitor** — one echo per interval. The interval arrives from the front end
   and is therefore clamped in the backend to 500 ms–60 s, so a modified client
   cannot turn it into a flood. It runs until the user stops it.
