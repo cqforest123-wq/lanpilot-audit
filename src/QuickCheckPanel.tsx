@@ -10,7 +10,10 @@ type PathVerdict = "direct" | "locallyIntercepted" | "noExternalPath" | "unknown
 type InterfaceKind = "physical" | "tunnel" | "bridge" | "loopback" | "other";
 type PortState = "open" | "refused" | "filtered";
 type DnsVerdict = "consistent" | "syntheticAnswer" | "divergent" | "inconclusive";
-type Tool = "ping" | "port" | "route" | "dns" | "watch" | "deep";
+type Tool = "ping" | "port" | "device" | "route" | "dns" | "watch" | "deep";
+type DeviceProfile = "camera" | "switch" | "generic";
+type RtspState = "serving" | "needsCredentials" | "notRtsp" | "unreachable";
+type SegmentVerdict = "standard" | "tunnelled" | "restricted" | "unreachable";
 type SignalQuality = "excellent" | "good" | "fair" | "weak" | "unusable";
 type EgressVerdict = "confirmed" | "split" | "intercepted" | "unknown";
 type ClockVerdict = "accurate" | "drifting" | "wrong" | "unreachable" | "imprecise";
@@ -48,6 +51,16 @@ interface LocalNetwork {
 interface PortResult { port: number; state: PortState; elapsedMs: number; service: string | null }
 interface DnsAnswer { server: string; addresses: string[]; elapsedMs: number | null; error: string | null }
 interface DnsDiagnosis { name: string; system: DnsAnswer[]; public: DnsAnswer; verdict: DnsVerdict; reasons: string[] }
+interface RtspCheck {
+  port: number; state: RtspState; methods: string[]; server: string | null; elapsedMs: number;
+}
+interface DeviceReport {
+  target: string; profile: DeviceProfile; ports: PortResult[]; rtsp: RtspCheck[]; findings: string[];
+}
+interface SegmentCheck {
+  target: string; port: number; mss: number | null; impliedMtu: number | null;
+  verdict: SegmentVerdict; reasons: string[];
+}
 interface Hop {
   ttl: number; address: string | null; hostname: string | null;
   rttMs: number | null; reachedTarget: boolean;
@@ -512,6 +525,139 @@ function PortTool() {
   );
 }
 
+/* Devices ------------------------------------------------------------------- */
+
+const PROFILES: DeviceProfile[] = ["camera", "switch", "generic"];
+/** Ports whose management page can be opened, mirroring the backend's rule. */
+const WEB_PORTS = [443, 8443, 80, 8080, 8000];
+
+function DeviceTool() {
+  const { t } = useI18n();
+  const describe = useErrorText();
+  const [target, setTarget] = useState("");
+  const [profile, setProfile] = useState<DeviceProfile>("camera");
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [report, setReport] = useState<DeviceReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let dispose: (() => void) | null = null;
+    void (async () => {
+      try {
+        const stop = await listen<[string, number]>("quick-check-device", (event) => {
+          if (active) setProgress(t(`quickCheck.deviceProbing.${event.payload[0]}`, { port: String(event.payload[1]) }));
+        });
+        if (active) dispose = stop;
+        else stop();
+      } catch {
+        // Progress text only; the report still arrives.
+      }
+    })();
+    return () => { active = false; dispose?.(); };
+  }, [t]);
+
+  const run = async () => {
+    const candidate = target.trim();
+    if (!candidate || running) return;
+    setRunning(true); setError(null); setReport(null); setProgress(null);
+    try {
+      setReport(await invoke<DeviceReport>("inspect_device", { target: candidate, profile }));
+    } catch (failure) {
+      setError(describe(failure));
+    } finally { setRunning(false); setProgress(null); }
+  };
+
+  const openPage = async (port: number) => {
+    try {
+      await invoke("open_device_page", { target: target.trim(), port });
+    } catch (failure) {
+      setError(describe(failure));
+    }
+  };
+
+  const openablePort = report?.ports.find(
+    (entry) => entry.state === "open" && WEB_PORTS.includes(entry.port),
+  );
+
+  return (
+    <>
+      <div className="qc-profiles" role="radiogroup" aria-label={t("quickCheck.deviceProfileLabel")}>
+        {PROFILES.map((entry) => (
+          <button
+            key={entry} type="button" role="radio" aria-checked={profile === entry}
+            className={profile === entry ? "active" : ""} disabled={running}
+            onClick={() => setProfile(entry)}
+          >
+            {t(`quickCheck.profile.${entry}`)}
+          </button>
+        ))}
+      </div>
+      <p className="qc-note">{t(`quickCheck.profileLede.${profile}`)}</p>
+
+      <TargetForm
+        value={target} onChange={setTarget} onSubmit={() => void run()} running={running}
+        label={t("quickCheck.deviceTargetLabel")} placeholder={t("quickCheck.placeholder")}
+        action={t("quickCheck.deviceRun")} busyAction={t("quickCheck.running")}
+      />
+
+      {running && progress ? <p className="qc-phase">{progress}</p> : null}
+      {error ? <p className="error-text">{error}</p> : null}
+
+      {report ? (
+        <>
+          <table className="qc-table qc-table-wide">
+            <thead>
+              <tr>
+                <th>{t("quickCheck.colPort")}</th><th>{t("quickCheck.colService")}</th>
+                <th>{t("quickCheck.colState")}</th><th>{t("quickCheck.colTime")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.ports.map((entry) => (
+                <tr key={entry.port}>
+                  <td>{entry.port}</td>
+                  <td>{entry.service ?? "—"}</td>
+                  <td><span className={`qc-pill qc-pill-${entry.state}`}>{t(`quickCheck.portState.${entry.state}`)}</span></td>
+                  <td>{entry.elapsedMs.toFixed(0)} ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {report.rtsp.length > 0 ? (
+            <div className="qc-rtsp">
+              <h3>{t("quickCheck.rtspHeading")}</h3>
+              {report.rtsp.map((entry) => (
+                <div key={entry.port} className={`qc-rtsp-row qc-rtsp-${entry.state}`}>
+                  <strong>{entry.port}</strong>
+                  <span>{t(`quickCheck.rtspState.${entry.state}`)}</span>
+                  {entry.server ? <em>{entry.server}</em> : null}
+                  {entry.methods.length > 0 ? <span className="qc-rtsp-methods">{entry.methods.join(", ")}</span> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {openablePort ? (
+            <div className="qc-presets">
+              <button type="button" onClick={() => void openPage(openablePort.port)}>
+                {t("quickCheck.openManagementPage", { port: String(openablePort.port) })}
+              </button>
+            </div>
+          ) : null}
+
+          <div className="qc-findings">
+            <h3>{t("quickCheck.whatThisMeans")}</h3>
+            <ul>{report.findings.map((finding) => <li key={finding}>{t(`quickCheck.deviceFinding.${finding}`)}</li>)}</ul>
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 /* Route --------------------------------------------------------------------- */
 
 function RouteTool() {
@@ -521,6 +667,7 @@ function RouteTool() {
   const [running, setRunning] = useState(false);
   const [hops, setHops] = useState<Hop[]>([]);
   const [trace, setTrace] = useState<Trace | null>(null);
+  const [segment, setSegment] = useState<SegmentCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -543,9 +690,15 @@ function RouteTool() {
   const run = async () => {
     const candidate = target.trim();
     if (!candidate || running) return;
-    setRunning(true); setError(null); setHops([]); setTrace(null);
+    setRunning(true); setError(null); setHops([]); setTrace(null); setSegment(null);
     try {
       setTrace(await invoke<Trace>("run_traceroute", { target: candidate, resolveNames: true }));
+      // Packet size is a property of the same path, so it belongs with the hops.
+      try {
+        setSegment(await invoke<SegmentCheck>("check_segment_size", { target: candidate, port: 443 }));
+      } catch {
+        setSegment(null);
+      }
     } catch (failure) {
       setError(describe(failure));
     } finally { setRunning(false); }
@@ -595,6 +748,22 @@ function RouteTool() {
 
       {trace && !trace.implausiblyShort ? (
         <p className="qc-note">{t(`quickCheck.routeOutcome.${trace.outcome}`)}</p>
+      ) : null}
+
+      {segment && segment.mss !== null ? (
+        <div className="qc-metrics">
+          <Metric
+            label={t("quickCheck.metricSegment")}
+            value={`${segment.mss} B`}
+            hint={t(`quickCheck.segmentVerdict.${segment.verdict}`)}
+            tone={segment.verdict === "restricted" ? "warn" : undefined}
+          />
+        </div>
+      ) : null}
+      {segment && segment.verdict !== "standard" && segment.mss !== null ? (
+        <div className="qc-findings">
+          <ul>{segment.reasons.map((reason) => <li key={reason}>{t(`quickCheck.segmentReason.${reason}`)}</li>)}</ul>
+        </div>
       ) : null}
     </>
   );
@@ -765,7 +934,7 @@ function WatchTool() {
 
 /* Shell -------------------------------------------------------------------- */
 
-const SANDBOX_SAFE_TOOLS: Tool[] = ["ping", "port", "route", "dns", "watch"];
+const SANDBOX_SAFE_TOOLS: Tool[] = ["ping", "port", "device", "route", "dns", "watch"];
 
 /**
  * The single destination for network diagnostics.
@@ -867,6 +1036,7 @@ export function QuickCheckPanel({
       <div className="qc-tool-body">
         {tool === "ping" ? <PingTool /> : null}
         {tool === "port" ? <PortTool /> : null}
+        {tool === "device" ? <DeviceTool /> : null}
         {tool === "route" ? <RouteTool /> : null}
         {tool === "dns" ? <DnsTool /> : null}
         {tool === "watch" ? <WatchTool /> : null}

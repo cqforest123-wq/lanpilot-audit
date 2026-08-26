@@ -48,6 +48,19 @@ code, so it is also the most tightly bounded.
   raised one step at a time, capped at 30 hops. Hop names come from
   `getnameinfo`, which uses the system resolver and its cache rather than
   generating extra DNS traffic.
+- **Devices** — a fixed port list per device kind, tested one port at a time,
+  never concurrently and never as a range. The profiles are constants in the
+  binary; the front end selects one by name and cannot supply a port list.
+  On camera profiles the RTSP `OPTIONS` method is sent, which is defined to work
+  without authentication and asks only which methods the server supports. No
+  credentials are sent, guessed, or stored, and a `401` reply is treated as a
+  successful identification rather than a prompt to try a login.
+- **Management page** — the URL is constructed in the backend from an already
+  validated address and a port observed open, and only `http`/`https` are
+  built. A URL string from the front end is never opened. `NSWorkspace` is used
+  rather than spawning `open`.
+- **Packet size** — one TCP handshake, then `getsockopt(TCP_MAXSEG)`. Nothing
+  is written to the connection.
 - **Clock** — one standard NTP client request per time server over UDP/123, to
   the same public servers macOS itself uses. Nothing is set or changed; the
   system clock is read, never written.

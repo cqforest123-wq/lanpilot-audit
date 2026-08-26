@@ -1,10 +1,12 @@
 //! Quick Check: a sandbox-safe, in-process reachability probe.
 
+pub mod devices;
 pub mod dns;
 pub mod egress;
 pub mod icmp;
 pub mod interference;
 pub mod monitor;
+pub mod mss;
 pub mod netinfo;
 pub mod ntp;
 pub mod port;

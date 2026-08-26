@@ -3134,6 +3134,54 @@ async fn check_clock() -> Result<quick_check::ntp::ClockCheck, String> {
 }
 
 #[tauri::command]
+async fn inspect_device(
+    app: tauri::AppHandle,
+    target: String,
+    profile: String,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::devices::DeviceReport, String> {
+    use quick_check::devices::DeviceProfile;
+
+    // Only the fixed profiles exist; an arbitrary port list is never accepted.
+    let profile = match profile.as_str() {
+        "camera" => DeviceProfile::Camera,
+        "switch" => DeviceProfile::Switch,
+        "generic" => DeviceProfile::Generic,
+        _ => return Err("device:unknownProfile".to_string()),
+    };
+    let address = quick_check::runner::resolve_raw(&target)?;
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::devices::inspect(address, profile, |kind, port| {
+            let _ = app.emit("quick-check-device", (kind, port));
+        })
+    })
+    .await
+    .map_err(|error| format!("Device worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn check_segment_size(
+    target: String,
+    port: u16,
+) -> Result<quick_check::mss::SegmentCheck, String> {
+    if port == 0 {
+        return Err("target:notHostnameOrIp".to_string());
+    }
+    let address = quick_check::runner::resolve_raw(&target)?;
+    tauri::async_runtime::spawn_blocking(move || quick_check::mss::check(address, port))
+        .await
+        .map_err(|error| format!("Segment worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn open_device_page(target: String, port: u16) -> Result<(), String> {
+    let address = quick_check::runner::resolve_raw(&target)?;
+    quick_check::devices::open_management_page(address, port).map_err(|code| format!("open:{code}"))
+}
+
+#[tauri::command]
 async fn run_traceroute(
     app: tauri::AppHandle,
     target: String,
@@ -3346,6 +3394,9 @@ pub fn run() {
             check_clock,
             check_tcp_port,
             run_traceroute,
+            inspect_device,
+            check_segment_size,
+            open_device_page,
             diagnose_dns,
             start_watch,
             stop_watch,

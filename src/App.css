@@ -708,3 +708,31 @@ th { color: #526172; background: #f6f8fa; }
 /* A route already declared unreal is shown for the record, not as a result. */
 .qc-hops-void { opacity: 0.5; }
 .qc-hops-void .qc-mono { text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* Device profiles --------------------------------------------------------- */
+
+.qc-profiles { display: flex; gap: 0.4rem; margin-top: 0.9rem; flex-wrap: wrap; }
+.qc-profiles button {
+  padding: 0.4rem 0.9rem; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--qc-line); background: transparent; color: inherit; font-size: 0.88rem;
+}
+.qc-profiles button.active {
+  border-color: #3b82f6; background: rgba(59, 130, 246, 0.12); font-weight: 500;
+}
+
+.qc-rtsp { margin-top: 1.1rem; }
+.qc-rtsp h3 { font-size: 0.92rem; margin-bottom: 0.5rem; }
+.qc-rtsp-row {
+  display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap;
+  padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--qc-line);
+  background: rgba(128, 128, 128, 0.06); font-size: 0.88rem; margin-bottom: 0.4rem;
+}
+.qc-rtsp-row strong { font-variant-numeric: tabular-nums; }
+.qc-rtsp-row em { font-style: normal; font-size: 0.78rem; opacity: 0.65; }
+.qc-rtsp-methods { font-size: 0.72rem; opacity: 0.5; overflow-wrap: anywhere; }
+.qc-rtsp-serving, .qc-rtsp-needsCredentials {
+  background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3);
+}
+.qc-rtsp-notRtsp, .qc-rtsp-unreachable {
+  background: rgba(234, 179, 8, 0.12); border-color: rgba(234, 179, 8, 0.4);
+}

@@ -46,6 +46,9 @@ Measured on macOS (Darwin 25.5, Apple silicon), all sandboxed:
 | Public egress lookup over DNS | works |
 | NTP clock check over UDP/123 | works |
 | Traceroute TTL sweep | works |
+| TCP_MAXSEG segment size | works |
+| Device profile sweep and RTSP OPTIONS | works |
+| Opening a management page via NSWorkspace | works |
 
 **The `network.server` entitlement is load-bearing.** With
 `network.client` alone, the same probe fails:
@@ -104,6 +107,13 @@ Clock accuracy is checked with an ordinary NTP client request to the same public
 time servers macOS uses. The app reads the system clock and never sets it. This
 is included because a drifted clock presents as a network fault: certificates
 appear invalid and two-factor codes are rejected.
+
+Device checks test a fixed, per-device-kind list of ports one at a time. There
+is no range syntax, no host sweep, and no concurrency. On camera profiles the
+app sends RTSP `OPTIONS`, the method defined to work without authentication,
+purely to confirm the streaming service is responding; an open port is not
+proof that a camera is working. No credentials are ever sent or guessed, and a
+401 response is recorded as a successful identification.
 
 It does not scan address ranges, enumerate hosts, sweep ports, or test
 credentials. Ports are tested one at a time and only when named or picked by the

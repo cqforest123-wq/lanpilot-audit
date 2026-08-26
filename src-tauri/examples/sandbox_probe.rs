@@ -7,7 +7,7 @@
 use std::net::{IpAddr, TcpStream, SocketAddr, UdpSocket};
 use std::time::Duration;
 
-use lanpilot_audit_app_lib::quick_check::{dns, egress, icmp, netinfo, ntp, port, route, traceroute, wifi};
+use lanpilot_audit_app_lib::quick_check::{devices, dns, egress, icmp, mss, netinfo, ntp, port, route, traceroute, wifi};
 
 fn line(label: &str, ok: bool, detail: String) {
     println!("  [{}] {:<34} {}", if ok { "PASS" } else { "FAIL" }, label, detail);
@@ -87,6 +87,17 @@ fn main() {
                           format!("{:?}, {} hops, implausible={}", trace.outcome, trace.hops.len(), trace.implausibly_short)),
         Err(error) => line("hop sweep", false, error),
     }
+
+    println!("\n=== 9. TCP segment size (TCP_MAXSEG) ===");
+    let segment = mss::check("1.1.1.1".parse().unwrap(), 443);
+    line("getsockopt TCP_MAXSEG", segment.mss.is_some(),
+         format!("mss={:?} mtu={:?} {:?}", segment.mss, segment.implied_mtu, segment.verdict));
+
+    println!("\n=== 10. Device profile sweep + RTSP ===");
+    let gateway = route::default_gateway().unwrap_or_else(|| "127.0.0.1".parse().unwrap());
+    let report = devices::inspect(gateway, devices::DeviceProfile::Switch, |_, _| {});
+    line("profile port sweep", !report.ports.is_empty(),
+         format!("{} ports, findings={:?}", report.ports.len(), report.findings));
 
     println!("\n=== verdict ===");
     println!("  Sandbox enforcing : {}", if contained { "yes" } else { "NO" });
