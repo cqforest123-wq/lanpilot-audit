@@ -14,6 +14,8 @@ type Tool = "ping" | "port" | "device" | "route" | "dns" | "watch" | "deep";
 type DeviceProfile = "camera" | "switch" | "generic";
 type RtspState = "serving" | "needsCredentials" | "notRtsp" | "unreachable";
 type SegmentVerdict = "standard" | "tunnelled" | "restricted" | "unreachable";
+type NeighbourKind = "device" | "randomised" | "multicast" | "broadcast" | "unresolved";
+type LikelyKind = "camera" | "network" | "endpoint";
 type SignalQuality = "excellent" | "good" | "fair" | "weak" | "unusable";
 type EgressVerdict = "confirmed" | "split" | "intercepted" | "unknown";
 type ClockVerdict = "accurate" | "drifting" | "wrong" | "unreachable" | "imprecise";
@@ -51,6 +53,11 @@ interface LocalNetwork {
 interface PortResult { port: number; state: PortState; elapsedMs: number; service: string | null }
 interface DnsAnswer { server: string; addresses: string[]; elapsedMs: number | null; error: string | null }
 interface DnsDiagnosis { name: string; system: DnsAnswer[]; public: DnsAnswer; verdict: DnsVerdict; reasons: string[] }
+interface Neighbour {
+  ip: string; mac: string | null; kind: NeighbourKind;
+  vendor: string | null; likely: LikelyKind | null;
+  interface: string | null; hostname: string | null;
+}
 interface RtspCheck {
   port: number; state: RtspState; methods: string[]; server: string | null; elapsedMs: number;
 }
@@ -531,6 +538,66 @@ const PROFILES: DeviceProfile[] = ["camera", "switch", "generic"];
 /** Ports whose management page can be opened, mirroring the backend's rule. */
 const WEB_PORTS = [443, 8443, 80, 8080, 8000];
 
+/** What this Mac has already talked to. Passive, and explicitly partial. */
+function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
+  const { t } = useI18n();
+  const [items, setItems] = useState<Neighbour[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setItems(await invoke<Neighbour[]>("list_neighbours", { resolveNames: true }));
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <details className="qc-details qc-neighbours" open>
+      <summary>
+        {t("quickCheck.neighboursHeading")}
+        {items ? <span className="qc-count">{items.length}</span> : null}
+      </summary>
+      <p className="qc-note">{t("quickCheck.neighboursLimit")}</p>
+      {items && items.length > 0 ? (
+        <table className="qc-table">
+          <tbody>
+            {items.map((entry) => (
+              <tr key={`${entry.ip}-${entry.mac ?? "none"}`}>
+                <td>
+                  <button type="button" className="qc-link" onClick={() => onPick(entry.ip)}>
+                    <span className="qc-mono">{entry.ip}</span>
+                  </button>
+                </td>
+                <td>
+                  {entry.vendor ? (
+                    <span className={entry.likely ? `qc-tag qc-tag-${entry.likely}` : "qc-tag"}>{entry.vendor}</span>
+                  ) : (
+                    <span className="qc-dim">{t(`quickCheck.neighbourKind.${entry.kind}`)}</span>
+                  )}
+                </td>
+                <td className="qc-dim">{entry.hostname ?? entry.mac ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="qc-note">{loading ? t("quickCheck.loadingOverview") : t("quickCheck.neighboursEmpty")}</p>
+      )}
+      <div className="qc-presets">
+        <button type="button" disabled={loading} onClick={() => void load()}>
+          {t("quickCheck.neighboursRefresh")}
+        </button>
+      </div>
+    </details>
+  );
+}
+
 function DeviceTool() {
   const { t } = useI18n();
   const describe = useErrorText();
@@ -583,6 +650,8 @@ function DeviceTool() {
 
   return (
     <>
+      <Neighbours onPick={setTarget} />
+
       <div className="qc-profiles" role="radiogroup" aria-label={t("quickCheck.deviceProfileLabel")}>
         {PROFILES.map((entry) => (
           <button

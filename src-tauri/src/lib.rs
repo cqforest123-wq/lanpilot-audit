@@ -3133,6 +3133,14 @@ async fn check_clock() -> Result<quick_check::ntp::ClockCheck, String> {
         .map_err(|error| format!("Clock worker failed: {error}"))
 }
 
+/// Passive: reads the kernel's neighbour table and sends nothing.
+#[tauri::command]
+async fn list_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbours::Neighbour>, String> {
+    tauri::async_runtime::spawn_blocking(move || quick_check::neighbours::list(resolve_names))
+        .await
+        .map_err(|error| format!("Neighbour worker failed: {error}"))
+}
+
 #[tauri::command]
 async fn inspect_device(
     app: tauri::AppHandle,
@@ -3395,6 +3403,7 @@ pub fn run() {
             check_tcp_port,
             run_traceroute,
             inspect_device,
+            list_neighbours,
             check_segment_size,
             open_device_page,
             diagnose_dns,

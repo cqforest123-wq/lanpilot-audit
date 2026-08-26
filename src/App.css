@@ -736,3 +736,25 @@ th { color: #526172; background: #f6f8fa; }
 .qc-rtsp-notRtsp, .qc-rtsp-unreachable {
   background: rgba(234, 179, 8, 0.12); border-color: rgba(234, 179, 8, 0.4);
 }
+
+/* Neighbour table --------------------------------------------------------- */
+
+.qc-neighbours { margin-top: 0.9rem; padding: 0.85rem 1rem; border: 1px solid var(--qc-line); border-radius: 10px; }
+.qc-neighbours summary { font-size: 0.9rem; opacity: 0.9; font-weight: 500; }
+.qc-count {
+  margin-left: 0.5rem; padding: 0.05rem 0.45rem; border-radius: 999px;
+  background: rgba(128, 128, 128, 0.18); font-size: 0.72rem; font-variant-numeric: tabular-nums;
+}
+.qc-link {
+  background: none; border: none; padding: 0; color: #3b82f6; cursor: pointer;
+  font: inherit; text-align: left;
+}
+.qc-link:hover { text-decoration: underline; }
+.qc-dim { opacity: 0.55; font-size: 0.82rem; }
+.qc-tag {
+  padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.76rem;
+  background: rgba(128, 128, 128, 0.16);
+}
+.qc-tag-camera { background: rgba(59, 130, 246, 0.18); }
+.qc-tag-network { background: rgba(168, 85, 247, 0.16); }
+.qc-tag-endpoint { background: rgba(34, 197, 94, 0.14); }
