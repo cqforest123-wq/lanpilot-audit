@@ -58,6 +58,9 @@ interface Neighbour {
   vendor: string | null; likely: LikelyKind | null;
   interface: string | null; hostname: string | null;
 }
+interface SweepResult {
+  subnet: string; probed: number; responded: number; hosts: Neighbour[];
+}
 interface RtspCheck {
   port: number; state: RtspState; methods: string[]; server: string | null; elapsedMs: number;
 }
@@ -543,6 +546,9 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
   const { t } = useI18n();
   const [items, setItems] = useState<Neighbour[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
+  const [swept, setSwept] = useState<SweepResult | null>(null);
+  const [progress, setProgress] = useState<[number, number] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -557,17 +563,48 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    let active = true;
+    let dispose: (() => void) | null = null;
+    void (async () => {
+      try {
+        const stop = await listen<[number, number]>("quick-check-sweep", (event) => {
+          if (active) setProgress(event.payload);
+        });
+        if (active) dispose = stop;
+        else stop();
+      } catch {
+        // Progress only.
+      }
+    })();
+    return () => { active = false; dispose?.(); };
+  }, []);
+
+  const sweep = async () => {
+    setSweeping(true); setProgress(null); setSwept(null);
+    try {
+      setSwept(await invoke<SweepResult>("sweep_local_subnet"));
+    } catch {
+      setSwept(null);
+    } finally { setSweeping(false); setProgress(null); }
+  };
+
+  // Once a sweep has run its list supersedes the passive one.
+  const shown = swept?.hosts ?? items;
+
   return (
     <details className="qc-details qc-neighbours" open>
       <summary>
         {t("quickCheck.neighboursHeading")}
         {items ? <span className="qc-count">{items.length}</span> : null}
       </summary>
-      <p className="qc-note">{t("quickCheck.neighboursLimit")}</p>
-      {items && items.length > 0 ? (
+      <p className="qc-note">
+        {swept ? t("quickCheck.sweptSummary", { subnet: swept.subnet, probed: String(swept.probed) }) : t("quickCheck.neighboursLimit")}
+      </p>
+      {shown && shown.length > 0 ? (
         <table className="qc-table">
           <tbody>
-            {items.map((entry) => (
+            {shown.map((entry) => (
               <tr key={`${entry.ip}-${entry.mac ?? "none"}`}>
                 <td>
                   <button type="button" className="qc-link" onClick={() => onPick(entry.ip)}>
@@ -587,12 +624,18 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
           </tbody>
         </table>
       ) : (
-        <p className="qc-note">{loading ? t("quickCheck.loadingOverview") : t("quickCheck.neighboursEmpty")}</p>
+        <p className="qc-note">{loading || sweeping ? t("quickCheck.loadingOverview") : t("quickCheck.neighboursEmpty")}</p>
       )}
       <div className="qc-presets">
-        <button type="button" disabled={loading} onClick={() => void load()}>
+        <button type="button" disabled={loading || sweeping} onClick={() => void load()}>
           {t("quickCheck.neighboursRefresh")}
         </button>
+        <button type="button" className="primary" disabled={sweeping} onClick={() => void sweep()}>
+          {sweeping ? t("quickCheck.sweepRunning") : t("quickCheck.sweepStart")}
+        </button>
+        {sweeping && progress ? (
+          <span className="qc-live-count">{progress[0]} / {progress[1]}</span>
+        ) : null}
       </div>
     </details>
   );

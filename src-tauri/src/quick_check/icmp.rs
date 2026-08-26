@@ -104,6 +104,19 @@ impl PingSocket {
             let rtt = sent_at.elapsed();
 
             if let Some(outcome) = self.classify(data, peer, rtt, seq) {
+                // An echo reply must come from the host that was asked. A
+                // time-exceeded or unreachable legitimately comes from a router
+                // on the way, so only the reply case is checked.
+                //
+                // Without this a stray reply is credited to whichever probe is
+                // waiting: sweeping a /24 reported 23 hosts as alive that
+                // answered nothing, because every probe shared a sequence
+                // number and payload and any one of them would accept it.
+                if let ProbeOutcome::Reply { from, .. } = &outcome {
+                    if *from != target {
+                        continue;
+                    }
+                }
                 return Ok(outcome);
             }
         }
@@ -250,6 +263,27 @@ mod tests {
         assert_eq!(u16::from_be_bytes([packet[6], packet[7]]), 7);
         assert!(packet.ends_with(PROBE_MAGIC));
         assert_eq!(checksum(&packet), 0, "checksum must verify to zero");
+    }
+
+    #[test]
+    fn an_echo_reply_from_another_host_is_not_our_answer() {
+        // The sweep bug: identical sequence and payload across concurrent
+        // probes meant any socket would adopt any reply.
+        let socket = PingSocket { socket: dummy_socket(), ipv6: false };
+        let reply = ipv4_echo_reply(1);
+        // classify still recognises it; probe() is what must reject the peer.
+        let outcome = socket.classify(&reply, "9.9.9.9".parse().unwrap(), Duration::ZERO, 1);
+        match outcome {
+            Some(ProbeOutcome::Reply { from, .. }) => {
+                assert_eq!(from, "9.9.9.9".parse::<IpAddr>().unwrap());
+                assert_ne!(
+                    from,
+                    "1.1.1.1".parse::<IpAddr>().unwrap(),
+                    "probe() must compare this against the target"
+                );
+            }
+            other => panic!("expected a reply, got {other:?}"),
+        }
     }
 
     #[test]

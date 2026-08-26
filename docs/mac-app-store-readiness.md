@@ -109,78 +109,35 @@ is included because a drifted clock presents as a network fault: certificates
 appear invalid and two-factor codes are rejected.
 
 Device checks test a fixed, per-device-kind list of ports one at a time. There
-is no range syntax, no host sweep, and no concurrency. On camera profiles the
-app sends RTSP `OPTIONS`, the method defined to work without authentication,
-purely to confirm the streaming service is responding; an open port is not
-proof that a camera is working. No credentials are ever sent or guessed, and a
-401 response is recorded as a successful identification.
+is no range syntax and no concurrency. On camera profiles the app sends RTSP
+`OPTIONS`, the method defined to work without authentication, purely to confirm
+the streaming service is responding; an open port is not proof that a camera is
+working. No credentials are ever sent or guessed, and a 401 response is
+recorded as a successful identification.
 
-It does not scan address ranges, enumerate hosts, sweep ports, or test
-credentials. Ports are tested one at a time and only when named or picked by the
-user. Group and broadcast addresses are refused outright so that a single
-request can never cause many devices to reply at once, and the monitoring
-interval is clamped in the backend so it cannot be driven at a flood rate.
+Device discovery sends one echo request to each address on the subnet this Mac
+is already attached to, so the user can find the equipment on their own network.
+The range is computed from the interface address and netmask and is never
+supplied by the user; anything larger than a /22 is refused. Presence is
+determined by link-layer resolution rather than by echo replies, because
+cameras commonly ignore ping. This is the same local-network discovery offered
+by Fing, LanScan, and Net Analyzer on the Mac App Store. The app does not probe
+addresses outside the local subnet, does not sweep ports across hosts, and does
+not attempt to authenticate to anything it finds.
 
-## Building the store variant
+Clock accuracy is checked with an ordinary NTP client request to the same public
+time servers macOS uses. The app reads the system clock and never sets it. This
+is included because a drifted clock presents as a network fault: certificates
+appear invalid and two-factor codes are rejected.
 
-```sh
-npm run app:build:appstore   # bundles with entitlements/appstore.entitlements
-npm run sandbox:verify       # proves the sandboxed build can still measure
-```
+Wi-Fi signal strength is read through CoreWLAN's `CWWiFiClient`. The app reads
+only the radio measurements — signal, noise, and rate — and deliberately does
+not request the network name or BSSID, so it never triggers a Location Services
+prompt and never learns the user's location.
 
-`src-tauri/tauri.appstore.conf.json` overlays the default config. It is a
-separate configuration on purpose: the default Developer ID build must stay
-un-sandboxed, because the governance audit engine runs bundled scripts.
-
-Two details in that overlay are easy to get wrong:
-
-- `"resources": null`, not `{}`. Tauri deep-merges configs, so an empty object
-  leaves the base `resources` in place and the engine scripts ship anyway.
-  Verified: the store bundle's `Contents/Resources` holds only `icon.icns`.
-- Entitlements are embedded **at signing time**. A build with no signing
-  identity produces an app with no entitlements and no sandbox, and nothing
-  warns you. The overlay signs ad-hoc (`"signingIdentity": "-"`) so a local
-  build is verifiable; a real submission overrides it with
-  `APPLE_SIGNING_IDENTITY`.
-
-The full-path report is hidden at runtime when `netinfo::is_sandboxed()` is
-true, so the store build never shows a control that the sandbox would block.
-
-Status of the sandboxed bundle as built today: three entitlements present,
-engine scripts excluded, signature valid, app launches, container created, and
-no sandbox denials in the system log.
-
-## Naming
-
-Checked against the Mac App Store in August 2026.
-
-**Do not ship the name "Network Doctor."** There is a live Mac App Store app
-called exactly that (id6789789507, macOS 14.6+, Apple silicon) occupying the
-same category — guided latency, DNS, and reachability checks with findings and
-next steps. It was previously this product's feature name and its tagline, which
-would have put a competitor's app name in our own App Store metadata. All
-occurrences were renamed to **Path Report** (`链路报告`), and the tagline now
-comes from `workflow.ts`: "Local-first network governance and reliability
-diagnostics".
-
-Neighbouring names to keep clear of, all live on the store:
-
-| Name | Note |
-| --- | --- |
-| Network Doctor | Direct collision, same category |
-| Network Check | id6475325315 |
-| NetCheck Connectivity | id1570703771 |
-| Network Connection Monitor | id646106690; its own feature is called "Connection Doctor" |
-| Network Utility / Network Kit X | networkutility.app, plus Apple's retired bundled tool |
-| MacPilot | Koingo Software; establishes "…Pilot" in the Mac utility space |
-
-**"LANPilot" itself returned no App Store conflict** and stays as the product
-name. Note that "MacPilot" exists in the same utility category, so the LANPilot
-name should stay visually and verbally distinct from it in listing assets.
-
-One caution on the current app name, "LANPilot Audit": security-adjacent words
-like *audit* and *scan* draw extra review attention. The review notes below are
-written to answer that up front.
+The public-address feature uses two ordinary DNS queries to public resolvers
+that answer with the querying address. It is not an HTTP request and sends no
+user data.
 
 ## Checklists
 

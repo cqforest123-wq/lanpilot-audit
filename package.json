@@ -43,7 +43,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "app:build:appstore": "npm run tauri -- build --config src-tauri/tauri.appstore.conf.json",
-    "sandbox:verify": "node scripts/verify-sandbox.mjs"
+    "sandbox:verify": "node scripts/verify-sandbox.mjs",
+    "app:build:full": "npm run tauri -- build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -7,7 +7,7 @@
 use std::net::{IpAddr, TcpStream, SocketAddr, UdpSocket};
 use std::time::Duration;
 
-use lanpilot_audit_app_lib::quick_check::{devices, dns, egress, icmp, mss, neighbours, netinfo, ntp, port, route, traceroute, wifi};
+use lanpilot_audit_app_lib::quick_check::{devices, dns, egress, icmp, mss, neighbours, netinfo, ntp, port, route, sweep, traceroute, wifi};
 
 fn line(label: &str, ok: bool, detail: String) {
     println!("  [{}] {:<34} {}", if ok { "PASS" } else { "FAIL" }, label, detail);
@@ -103,6 +103,14 @@ fn main() {
     let found = neighbours::list(false);
     line("sysctl NET_RT_FLAGS", true,
          format!("{} neighbours, {} named", found.len(), found.iter().filter(|n| n.vendor.is_some()).count()));
+
+    println!("\n=== 12. Subnet sweep bounds ===");
+    // The bounds are what matter here; a full sweep would take too long to be
+    // part of a verification run.
+    let ok = sweep::hosts_in("192.168.2.224".parse().unwrap(), 24).map(|h| h.len());
+    let refused = sweep::hosts_in("10.0.0.1".parse().unwrap(), 16).is_err();
+    line("subnet maths and limits", ok == Ok(254) && refused,
+         format!("/24 -> {ok:?} hosts, /16 refused = {refused}"));
 
     println!("\n=== verdict ===");
     println!("  Sandbox enforcing : {}", if contained { "yes" } else { "NO" });

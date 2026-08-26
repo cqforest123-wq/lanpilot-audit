@@ -3141,6 +3141,36 @@ async fn list_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbo
         .map_err(|error| format!("Neighbour worker failed: {error}"))
 }
 
+/// Sweeps only the subnet this Mac is attached to; the caller supplies no range.
+#[tauri::command]
+async fn sweep_local_subnet(
+    app: tauri::AppHandle,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::sweep::SweepResult, String> {
+    let interfaces = quick_check::netinfo::interfaces();
+    let active = interfaces
+        .iter()
+        .find(|entry| entry.kind == quick_check::netinfo::InterfaceKind::Physical && entry.is_up)
+        .ok_or_else(|| "sweep:noLocalSubnet".to_string())?;
+    let address: std::net::Ipv4Addr =
+        active.ipv4.parse().map_err(|_| "sweep:noLocalSubnet".to_string())?;
+    let prefix = active.prefix;
+
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::sweep::run(address, prefix, |done, total| {
+            let _ = app.emit("quick-check-sweep", (done, total));
+        })
+    })
+    .await
+    .map_err(|error| format!("Sweep worker failed: {error}"))?
+    .map_err(|refusal| format!("sweep:{}", match refusal {
+        quick_check::sweep::SweepRefusal::NoLocalSubnet => "noLocalSubnet",
+        quick_check::sweep::SweepRefusal::SubnetTooLarge => "subnetTooLarge",
+    }))
+}
+
 #[tauri::command]
 async fn inspect_device(
     app: tauri::AppHandle,
@@ -3404,6 +3434,7 @@ pub fn run() {
             run_traceroute,
             inspect_device,
             list_neighbours,
+            sweep_local_subnet,
             check_segment_size,
             open_device_page,
             diagnose_dns,

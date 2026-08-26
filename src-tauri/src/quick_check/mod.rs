@@ -15,6 +15,7 @@ pub mod port;
 pub mod route;
 pub mod runner;
 pub mod stats;
+pub mod sweep;
 pub mod traceroute;
 pub mod wifi;
 pub mod target;
