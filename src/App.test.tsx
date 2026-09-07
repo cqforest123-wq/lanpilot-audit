@@ -469,3 +469,54 @@ describe("full guided workflow localization", () => {
     expect(await screen.findByText(engineHeading)).toBeVisible();
   });
 });
+
+describe("sandboxed build navigation", () => {
+  const withSandbox = (value: unknown) => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "is_sandboxed") return Promise.resolve(value);
+      if (command === "list_audit_interfaces") return Promise.resolve([]);
+      return Promise.resolve(engineStatus);
+    });
+  };
+
+  it("hides the engine-backed pages under App Sandbox", async () => {
+    // Those pages read a lab directory the sandboxed build never creates, and
+    // Export would write into the container where the user cannot find it.
+    withSandbox(true);
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Governance Audit" })).not.toBeInTheDocument(),
+    );
+    for (const name of ["Reports", "Remediation", "Export"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    // Quick Check does not need the engine, so it stays.
+    expect(screen.getByRole("button", { name: "Quick Check" })).toBeVisible();
+  });
+
+  it("keeps them in the unsandboxed build", async () => {
+    withSandbox(false);
+    render(<App />);
+
+    for (const name of ["Governance Audit", "Reports", "Remediation", "Export"]) {
+      expect(await screen.findByRole("button", { name })).toBeVisible();
+    }
+  });
+
+  it("shows them when the probe fails or answers oddly", async () => {
+    // Failing closed would strip working features off the Developer ID build.
+    withSandbox({ unexpected: "shape" });
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Export" })).toBeVisible();
+
+    cleanup();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "is_sandboxed") return Promise.reject(new Error("no bridge"));
+      if (command === "list_audit_interfaces") return Promise.resolve([]);
+      return Promise.resolve(engineStatus);
+    });
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Export" })).toBeVisible();
+  });
+});

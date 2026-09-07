@@ -3109,6 +3109,13 @@ fn collect_network_reliability(
     })
 }
 
+/// Cheap enough for the shell to call on mount, so engine-backed navigation
+/// can be hidden before the user clicks into an empty page.
+#[tauri::command]
+fn is_sandboxed() -> bool {
+    quick_check::netinfo::is_sandboxed()
+}
+
 #[tauri::command]
 fn read_local_network() -> quick_check::netinfo::LocalNetwork {
     quick_check::netinfo::snapshot()
@@ -3482,6 +3489,7 @@ pub fn run() {
             run_network_reliability_check,
             run_quick_check,
             read_local_network,
+            is_sandboxed,
             read_public_egress,
             check_clock,
             check_tcp_port,

@@ -169,6 +169,27 @@ const formatDuration = (durationMs: number | undefined, pending: string): string
 function App() {
   const { t } = useI18n();
   const [page, setPage] = useState<Page>("overview");
+  // The engine-backed pages read a lab directory the sandboxed build never
+  // creates, and Export would write into the container where the user cannot
+  // find it. Offering them there is worse than not offering them.
+  const [sandboxed, setSandboxed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const value = await invoke<boolean>("is_sandboxed");
+        // Strictly true only. Anything else — an older backend, an unexpected
+        // shape — must not hide features that work.
+        if (active) setSandboxed(value === true);
+      } catch {
+        // Unknown means show everything; hiding on a failed probe would remove
+        // working features from the Developer ID build.
+        if (active) setSandboxed(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
   const [auditRunning, setAuditRunning] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [details, setDetails] = useState<AuthorizationDetails | null>(null);
@@ -197,10 +218,14 @@ function App() {
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
           <NavButton active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
           <NavButton active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
-          <NavButton active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
-          <NavButton active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
-          <NavButton active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
-          <NavButton active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+          {sandboxed ? null : (
+            <>
+              <NavButton active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
+              <NavButton active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
+              <NavButton active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
+              <NavButton active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+            </>
+          )}
           <NavButton active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
         </nav>
         <div className="sidebar-footer">
