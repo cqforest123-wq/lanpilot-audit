@@ -53,6 +53,24 @@ the backend. The front end selects a named profile; it never supplies a port
 list, a rate, or a URL. Management pages are opened from a URL built in the
 backend from an already-validated address and a port observed open.
 
+## Scope
+
+Every tool but one acts on an address the user typed, so their intent is the
+authorization. Device discovery is the exception: it sends a request to every
+address on whatever segment this Mac is attached to, and that segment is not
+always theirs — a hotel, a client site, a shared office.
+
+So the sweep is gated on an explicit, per-network confirmation. The subnet is
+read from the live interface and never supplied by the caller, so consent
+cannot be recorded for a network the Mac is not on. Confirmations are stored in
+the app's own data directory with a timestamp and an optional label, listed in
+the UI, and revocable. A corrupt or unreadable store authorizes nothing rather
+than failing open.
+
+This is a consent record, not an access control — anyone can click yes. Its
+purpose is that they had to, once, and that what they agreed to is written
+down.
+
 ## Read-only by construction
 
 The app reads network state and sends probes. It sets no configuration, writes

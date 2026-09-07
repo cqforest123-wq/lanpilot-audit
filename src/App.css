@@ -758,3 +758,30 @@ th { color: #526172; background: #f6f8fa; }
 .qc-tag-camera { background: rgba(59, 130, 246, 0.18); }
 .qc-tag-network { background: rgba(168, 85, 247, 0.16); }
 .qc-tag-endpoint { background: rgba(34, 197, 94, 0.14); }
+
+/* Scope consent ----------------------------------------------------------- */
+
+.qc-consent {
+  margin-top: 0.9rem; padding: 1rem 1.1rem; border-radius: 10px;
+  background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.4);
+}
+.qc-consent strong { display: block; font-size: 1rem; margin-bottom: 0.35rem; }
+.qc-consent p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.6; max-width: 62ch; }
+.qc-consent .qc-field { flex: 1 1 auto; max-width: 22rem; }
+
+.qc-scope-list {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  margin-top: 0.8rem; font-size: 0.8rem;
+}
+.qc-scope-list > span:first-child { opacity: 0.55; }
+.qc-scope-item {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.6rem; border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.qc-scope-item em { font-style: normal; opacity: 0.7; }
+.qc-scope-item button {
+  border: none; background: rgba(128, 128, 128, 0.25); color: inherit;
+  width: 1.1rem; height: 1.1rem; border-radius: 50%; cursor: pointer;
+  line-height: 1; padding: 0; font-size: 0.8rem;
+}

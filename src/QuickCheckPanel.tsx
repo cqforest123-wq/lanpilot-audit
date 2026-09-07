@@ -58,6 +58,8 @@ interface Neighbour {
   vendor: string | null; likely: LikelyKind | null;
   interface: string | null; hostname: string | null;
 }
+interface ScopeRecord { subnet: string; authorizedAt: string; note: string | null }
+interface SweepScope { subnet: string; authorized: boolean }
 interface SweepResult {
   subnet: string; probed: number; responded: number; hosts: Neighbour[];
 }
@@ -165,6 +167,19 @@ function TargetForm({
       </button>
     </form>
   );
+}
+
+/** Scope errors carry the subnet after the code, so they need their own parse. */
+function describeScopeError(raw: unknown, t: (key: string, params?: Record<string, string>) => string) {
+  const cleaned = String(raw).replace(/^Error:\s*/, "");
+  const [kind, code, extra] = cleaned.split(":");
+  if (kind === "scope" && code === "notAuthorized") {
+    return t("quickCheck.error.notAuthorized", { subnet: extra ?? "" });
+  }
+  if ((kind === "scope" || kind === "sweep") && code) {
+    return t(`quickCheck.error.${code}`);
+  }
+  return t("quickCheck.error.generic");
 }
 
 /** Backend errors arrive as stable `kind:code` keys, never raw text. */
@@ -549,6 +564,10 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
   const [sweeping, setSweeping] = useState(false);
   const [swept, setSwept] = useState<SweepResult | null>(null);
   const [progress, setProgress] = useState<[number, number] | null>(null);
+  const [pending, setPending] = useState<SweepScope | null>(null);
+  const [note, setNote] = useState("");
+  const [scope, setScope] = useState<ScopeRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -580,13 +599,59 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
     return () => { active = false; dispose?.(); };
   }, []);
 
-  const sweep = async () => {
-    setSweeping(true); setProgress(null); setSwept(null);
+  const loadScope = useCallback(async () => {
+    try {
+      setScope(await invoke<ScopeRecord[]>("read_scope"));
+    } catch {
+      setScope([]);
+    }
+  }, []);
+
+  useEffect(() => { void loadScope(); }, [loadScope]);
+
+  const runSweep = async () => {
+    setSweeping(true); setProgress(null); setSwept(null); setError(null);
     try {
       setSwept(await invoke<SweepResult>("sweep_local_subnet"));
-    } catch {
+      await load();
+    } catch (failure) {
+      setError(describeScopeError(failure, t));
       setSwept(null);
     } finally { setSweeping(false); setProgress(null); }
+  };
+
+  /// Asks for consent the first time a network is swept, then remembers it.
+  const startSweep = async () => {
+    setError(null);
+    try {
+      const current = await invoke<SweepScope>("describe_sweep_scope");
+      if (current.authorized) {
+        await runSweep();
+      } else {
+        setPending(current);
+      }
+    } catch (failure) {
+      setError(describeScopeError(failure, t));
+    }
+  };
+
+  const confirmScope = async () => {
+    try {
+      setScope(await invoke<ScopeRecord[]>("authorize_current_subnet", { note: note.trim() || null }));
+      setPending(null);
+      setNote("");
+      await runSweep();
+    } catch (failure) {
+      setError(describeScopeError(failure, t));
+    }
+  };
+
+  const revoke = async (subnet: string) => {
+    try {
+      setScope(await invoke<ScopeRecord[]>("revoke_subnet", { subnet }));
+    } catch (failure) {
+      setError(describeScopeError(failure, t));
+    }
   };
 
   // Once a sweep has run its list supersedes the passive one.
@@ -626,11 +691,48 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
       ) : (
         <p className="qc-note">{loading || sweeping ? t("quickCheck.loadingOverview") : t("quickCheck.neighboursEmpty")}</p>
       )}
+      {pending ? (
+        <div className="qc-consent" role="alertdialog" aria-label={t("quickCheck.scopeTitle")}>
+          <strong>{t("quickCheck.scopeTitle")}</strong>
+          <p>{t("quickCheck.scopeBody", { subnet: pending.subnet })}</p>
+          <label className="qc-field">
+            <span>{t("quickCheck.scopeNoteLabel")}</span>
+            <input
+              type="text" value={note} placeholder={t("quickCheck.scopeNotePlaceholder")}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </label>
+          <div className="qc-presets">
+            <button type="button" className="primary" onClick={() => void confirmScope()}>
+              {t("quickCheck.scopeConfirm")}
+            </button>
+            <button type="button" onClick={() => { setPending(null); setNote(""); }}>
+              {t("quickCheck.scopeCancel")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? <p className="error-text">{error}</p> : null}
+
+      {scope.length > 0 ? (
+        <div className="qc-scope-list">
+          <span>{t("quickCheck.scopeAuthorized")}</span>
+          {scope.map((record) => (
+            <span key={record.subnet} className="qc-scope-item">
+              <span className="qc-mono">{record.subnet}</span>
+              {record.note ? <em>{record.note}</em> : null}
+              <button type="button" onClick={() => void revoke(record.subnet)} aria-label={t("quickCheck.scopeRevoke")}>×</button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <div className="qc-presets">
         <button type="button" disabled={loading || sweeping} onClick={() => void load()}>
           {t("quickCheck.neighboursRefresh")}
         </button>
-        <button type="button" className="primary" disabled={sweeping} onClick={() => void sweep()}>
+        <button type="button" className="primary" disabled={sweeping || pending !== null} onClick={() => void startSweep()}>
           {sweeping ? t("quickCheck.sweepRunning") : t("quickCheck.sweepStart")}
         </button>
         {sweeping && progress ? (

@@ -117,8 +117,11 @@ recorded as a successful identification.
 
 Device discovery sends one echo request to each address on the subnet this Mac
 is already attached to, so the user can find the equipment on their own network.
-The range is computed from the interface address and netmask and is never
-supplied by the user; anything larger than a /22 is refused. Presence is
+It runs only after the operator explicitly confirms, once per network, that the
+network is theirs to check; that confirmation is stored with a timestamp,
+listed in the app, and can be withdrawn. The range is computed from the
+interface address and netmask and is never supplied by the user; anything
+larger than a /22 is refused. Presence is
 determined by link-layer resolution rather than by echo replies, because
 cameras commonly ignore ping. This is the same local-network discovery offered
 by Fing, LanScan, and Net Analyzer on the Mac App Store. The app does not probe

@@ -3141,12 +3141,8 @@ async fn list_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbo
         .map_err(|error| format!("Neighbour worker failed: {error}"))
 }
 
-/// Sweeps only the subnet this Mac is attached to; the caller supplies no range.
-#[tauri::command]
-async fn sweep_local_subnet(
-    app: tauri::AppHandle,
-    execution_state: tauri::State<'_, AuditExecutionState>,
-) -> Result<quick_check::sweep::SweepResult, String> {
+/// The subnet this Mac is attached to, as canonical CIDR.
+fn current_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
     let interfaces = quick_check::netinfo::interfaces();
     let active = interfaces
         .iter()
@@ -3154,7 +3150,65 @@ async fn sweep_local_subnet(
         .ok_or_else(|| "sweep:noLocalSubnet".to_string())?;
     let address: std::net::Ipv4Addr =
         active.ipv4.parse().map_err(|_| "sweep:noLocalSubnet".to_string())?;
-    let prefix = active.prefix;
+    let subnet = quick_check::scope::canonical_subnet(address, active.prefix)
+        .ok_or_else(|| "sweep:noLocalSubnet".to_string())?;
+    Ok((address, active.prefix, subnet))
+}
+
+fn scope_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_data_dir().map_err(|error| format!("scope:noDataDir:{error}"))
+}
+
+#[tauri::command]
+fn read_scope(app: tauri::AppHandle) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    Ok(quick_check::scope::read(&scope_dir(&app)?))
+}
+
+/// Records that the operator says they may assess this network. The subnet is
+/// taken from the live interface, never from the caller, so consent cannot be
+/// recorded for a network the Mac is not on.
+#[tauri::command]
+fn authorize_current_subnet(
+    app: tauri::AppHandle,
+    note: Option<String>,
+) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    let (_, _, subnet) = current_subnet()?;
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    quick_check::scope::authorize(&scope_dir(&app)?, &subnet, note, now)
+}
+
+#[tauri::command]
+fn revoke_subnet(
+    app: tauri::AppHandle,
+    subnet: String,
+) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    quick_check::scope::revoke(&scope_dir(&app)?, &subnet)
+}
+
+/// What the sweep would cover, and whether it has been authorized yet.
+#[tauri::command]
+fn describe_sweep_scope(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let (_, _, subnet) = current_subnet()?;
+    let authorized =
+        quick_check::scope::is_authorized(&quick_check::scope::read(&scope_dir(&app)?), &subnet);
+    Ok(serde_json::json!({ "subnet": subnet, "authorized": authorized }))
+}
+
+/// Sweeps only the subnet this Mac is attached to, and only once the operator
+/// has said they may assess it. Every other tool acts on an address the user
+/// typed; this one reaches addresses they did not name, on a segment that is
+/// not always theirs.
+#[tauri::command]
+async fn sweep_local_subnet(
+    app: tauri::AppHandle,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::sweep::SweepResult, String> {
+    let (address, prefix, subnet) = current_subnet()?;
+
+    let records = quick_check::scope::read(&scope_dir(&app)?);
+    if !quick_check::scope::is_authorized(&records, &subnet) {
+        return Err(format!("scope:notAuthorized:{subnet}"));
+    }
 
     let _guard = execution_state.try_start()?;
 
@@ -3435,6 +3489,10 @@ pub fn run() {
             inspect_device,
             list_neighbours,
             sweep_local_subnet,
+            read_scope,
+            authorize_current_subnet,
+            revoke_subnet,
+            describe_sweep_scope,
             check_segment_size,
             open_device_page,
             diagnose_dns,

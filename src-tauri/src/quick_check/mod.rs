@@ -14,6 +14,7 @@ pub mod oui;
 pub mod port;
 pub mod route;
 pub mod runner;
+pub mod scope;
 pub mod stats;
 pub mod sweep;
 pub mod traceroute;
