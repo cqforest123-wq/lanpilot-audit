@@ -107,6 +107,36 @@ describe("audit authorization and failure flow", () => {
     expect(screen.getAllByRole("checkbox").every((checkbox) => !(checkbox as HTMLInputElement).checked)).toBe(true);
   });
 
+  it("does not deadlock authorization behind an outdated-but-present engine", async () => {
+    // Regression test: a stale/incomplete engine directory (e.g. an old
+    // install left over from a previous app version) makes engineFound true
+    // but scriptsReady false. The ONLY way to fix that is the Install/Update
+    // button on the next page (EngineSetupPage), so Confirm Authorization
+    // must not require scriptsReady -- requiring it here was a real deadlock
+    // that shipped across several versions (engine present-but-outdated ->
+    // can never reach the page that updates it).
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "check_engine") {
+        return Promise.resolve({ ...engineStatus, scriptsReady: false, warnings: ["One or more approved audit scripts are missing or not executable."] });
+      }
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await startGovernanceAudit(user);
+    await screen.findByText("Engine: Ready");
+
+    const confirmButton = screen.getByRole("button", { name: "Confirm Authorization" });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/Project name/), "Test audit");
+    for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
+
+    expect(confirmButton).toBeEnabled();
+  });
+
   it("runs all fixed steps in order before enabling the report", async () => {
     const invokedSteps: string[] = [];
     invokeMock.mockImplementation((command: string) => {

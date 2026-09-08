@@ -793,6 +793,19 @@ fn install_bundled_engine(app: tauri::AppHandle) -> Result<EngineStatus, String>
     let source = bundled_engine_path(&app)?;
     let destination = engine_path()?;
     verify_engine_manifest(&source)?;
+    // Wipe any existing installation first. This is an install/UPDATE, not a
+    // merge: an older installed engine can have files the new bundled engine
+    // no longer ships (renamed/split/removed scripts across versions). Without
+    // this, those stale files linger after every copy and the very next
+    // manifest check on `destination` fails with "contains files not
+    // represented by its integrity manifest" -- permanently, since nothing
+    // ever removes them. The destination is entirely engine-owned (audit run
+    // data lives under a separate `lanpilot-audit-latest` directory), so a
+    // clean wipe-and-recopy is safe.
+    if destination.exists() {
+        fs::remove_dir_all(&destination)
+            .map_err(|error| format!("Unable to remove the previous engine installation: {error}"))?;
+    }
     copy_engine_directory(&source, &destination)?;
     verify_engine_manifest(&destination)?;
     check_engine()
@@ -1492,6 +1505,42 @@ fn open_engine_folder() -> Result<(), String> {
         ));
     }
     open_fixed_folder(&engine)
+}
+
+/// Open one of a small, fixed set of About-page links in the default browser
+/// or mail client. Same discipline as elsewhere in this file: the URL is
+/// never accepted as a string from the frontend, only a `link_id` matched
+/// against a hardcoded allowlist here, so the frontend cannot make this open
+/// an arbitrary address.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn open_about_link(link_id: &str) -> Result<(), String> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{NSString, NSURL};
+
+    let url = match link_id {
+        "source" => "https://github.com/cqforest123-wq/lanpilot-audit",
+        "issues" => "https://github.com/cqforest123-wq/lanpilot-audit/issues",
+        "license" => "https://github.com/cqforest123-wq/lanpilot-audit/blob/main/LICENSE",
+        "email" => "mailto:cqforest123@gmail.com",
+        _ => return Err(format!("Unknown about link: {link_id}")),
+    };
+
+    let string = NSString::from_str(url);
+    let Some(target) = NSURL::URLWithString(&string) else {
+        return Err("Unable to construct link URL.".to_string());
+    };
+    if NSWorkspace::sharedWorkspace().openURL(&target) {
+        Ok(())
+    } else {
+        Err("Unable to open the link.".to_string())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn open_about_link(_link_id: &str) -> Result<(), String> {
+    Err("Opening links is only supported on macOS.".to_string())
 }
 
 fn add_directory_to_zip(
@@ -3517,7 +3566,8 @@ pub fn run() {
             export_latest_lab_zip,
             open_network_reliability_artifact,
             open_engine_folder,
-            open_export_folder
+            open_export_folder,
+            open_about_link
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -3563,6 +3613,63 @@ mod tests {
     fn unknown_step_ids_are_rejected_by_deserialization() {
         let result = serde_json::from_str::<AuditStep>("\"custom_command\"");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn install_over_a_stale_engine_removes_files_the_new_version_no_longer_ships() {
+        // Regression test for a real bug: install_bundled_engine used to copy
+        // new files over an existing installation without removing anything
+        // first. If an older installed engine has a file the new bundled
+        // engine renamed or dropped, that stray file survives the "update"
+        // and the immediately-following manifest check on the destination
+        // fails forever after -- the Install/Update button becomes
+        // permanently broken until someone manually deletes the directory.
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lanpilot-engine-upgrade-test-{unique}"));
+        let source = root.join("source");
+        let destination = root.join("destination");
+        fs::create_dir_all(&source).expect("source directory should be created");
+        fs::create_dir_all(&destination).expect("destination directory should be created");
+
+        // New bundled engine ships exactly one file.
+        let new_contents = b"echo new-step";
+        fs::write(source.join("01-step.sh"), new_contents).expect("new script should be written");
+        let mut hasher = Sha256::new();
+        hasher.update(new_contents);
+        let new_hash = format!("{:x}", hasher.finalize());
+        fs::write(
+            source.join("ENGINE_SHA256SUMS.txt"),
+            format!("{new_hash}  01-step.sh\n"),
+        )
+        .expect("source manifest should be written");
+
+        // Destination has an OLD installation with a file the new version no
+        // longer ships (simulating a renamed/removed script across versions).
+        fs::write(destination.join("00-legacy-step.sh"), b"echo old-step")
+            .expect("stale legacy script should be written");
+
+        // The old (buggy) behavior: copy without wiping first leaves the
+        // stray file behind and the destination fails its own manifest check.
+        copy_engine_directory(&source, &destination).expect("copy should succeed");
+        assert!(
+            verify_engine_manifest(&destination).is_err(),
+            "sanity check: a stray file must make the naive copy fail its own manifest check"
+        );
+
+        // The fix: wipe the destination before copying, exactly as
+        // install_bundled_engine now does.
+        fs::remove_dir_all(&destination).expect("stale destination should be removable");
+        copy_engine_directory(&source, &destination).expect("copy should succeed");
+        assert!(
+            verify_engine_manifest(&destination).is_ok(),
+            "a clean reinstall must pass its own manifest check"
+        );
+        assert!(!destination.join("00-legacy-step.sh").exists());
+
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]
