@@ -21,7 +21,7 @@ const en: Messages = {
   "language.title":"Language","language.current":"Current language","language.select":"Select language",
   "guardrail.description":"No offensive testing, password attacks, unauthorized login, configuration changes, or lateral movement.",
   "engineWarning.engineNotFound":"Local audit engine directory was not found.","engineWarning.scriptsNotReady":"One or more approved audit scripts are missing or not executable.","engineWarning.nmapUnavailable":"nmap is not available on the fixed audit PATH.","engineWarning.noLatestLab":"No latest audit lab is available yet.","engineWarning.developmentFallback":"Using the development engine fallback.","engineWarning.updateAvailable":"A bundled engine update is available.","engineWarning.integrityCheckFailed":"The installed engine failed its integrity check.",
-  "settings.about":"About","settings.author":"Author","settings.contact":"Contact","settings.license":"License","settings.sourceCode":"Source code","settings.reportIssue":"Report an issue",
+  "settings.about":"About","settings.author":"Author","settings.contact":"Contact","settings.license":"License","settings.sourceCode":"Source code","settings.reportIssue":"Report an issue","settings.githubIssues":"GitHub Issues",
 };
 
 const zhCN: Messages = {
@@ -45,7 +45,7 @@ const zhCN: Messages = {
   "language.title":"语言","language.current":"当前语言","language.select":"选择语言",
   "guardrail.description":"不进行攻击性测试、密码攻击、未授权登录、配置修改或横向移动。",
   "engineWarning.engineNotFound":"未找到本地审计引擎目录。","engineWarning.scriptsNotReady":"一个或多个授权审计脚本缺失或不可执行。","engineWarning.nmapUnavailable":"固定审计 PATH 中没有可用的 nmap。","engineWarning.noLatestLab":"尚无最近的审计目录。","engineWarning.developmentFallback":"正在使用开发环境的引擎回退路径。","engineWarning.updateAvailable":"有可用的内置引擎更新。","engineWarning.integrityCheckFailed":"已安装的引擎未通过完整性校验。",
-  "settings.about":"关于","settings.author":"作者","settings.contact":"联系方式","settings.license":"开源协议","settings.sourceCode":"源代码","settings.reportIssue":"反馈问题",
+  "settings.about":"关于","settings.author":"作者","settings.contact":"联系方式","settings.license":"开源协议","settings.sourceCode":"源代码","settings.reportIssue":"反馈问题","settings.githubIssues":"GitHub Issues",
 };
 
 const translated = (values: Partial<Messages>): Messages => {

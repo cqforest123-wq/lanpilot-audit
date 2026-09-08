@@ -225,18 +225,28 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock).toHaveBeenCalledWith("export_latest_lab_zip");
   });
 
-  it("generates a fixed local remediation pack and requires authorization before retest", async () => {
+  it("shows a plain-language tip per deduplicated finding, with no ticket-editing UI, and requires authorization before retest", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "read_latest_report") return Promise.resolve(localizedReportFixture);
-      if (command === "read_remediation_pack") return Promise.resolve(null);
-      if (command === "save_remediation_pack") return Promise.resolve();
       return Promise.resolve();
     });
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Remediation" }));
-    await user.click(await screen.findByRole("button", { name: "Generate Remediation Pack" }));
-    expect(invokeMock).toHaveBeenCalledWith("save_remediation_pack", { pack: expect.objectContaining({ tickets: expect.any(Array) }) });
+
+    // The fixture has a duplicate SMB finding -- it must collapse to one tip.
+    await screen.findByText("192.168.50.248");
+    expect(screen.getAllByText("192.168.50.248")).toHaveLength(1);
+    expect(screen.getByText("192.168.50.88")).toBeVisible();
+    expect(screen.getByText("192.168.50.90")).toBeVisible();
+    expect(screen.getAllByText(/💡/)).toHaveLength(3);
+
+    // Simplified on purpose: no generate/save button, no ticket fields, no
+    // remediation-pack round trip at all.
+    expect(screen.queryByRole("button", { name: "Generate Remediation Pack" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Owner")).not.toBeInTheDocument();
+    expect(invokeMock.mock.calls.some(([command]) => command === "save_remediation_pack")).toBe(false);
+
     await user.click(screen.getByRole("button", { name: "Enter Authorized Retest" }));
     expect(screen.getByRole("button", { name: "Confirm Authorization" })).toBeDisabled();
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);

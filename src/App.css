@@ -591,6 +591,9 @@ th { color: #526172; background: #f6f8fa; }
 .severity.high { color: #aa3434; background: #faeaea; }
 .severity.medium { color: #8a5b19; background: #fff3dc; }
 .severity.low { color: #246b86; background: #e9f3f7; }
+.remediation-tip { display: grid; gap: 10px; }
+.remediation-tip p { line-height: 1.55; color: #405564; }
+.remediation-hint { padding: 10px 12px; border-radius: 10px; background: #f1f2fe; color: #2c3e50; font-weight: 650; }
 
 @media (max-width: 760px) {
   body { min-width: 0; }

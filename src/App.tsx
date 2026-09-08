@@ -5,7 +5,6 @@ import { useI18n } from "./i18n";
 import { QuickCheckPanel } from "./QuickCheckPanel";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
-import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
 import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkReliabilityEvidence, type ReliabilityStatus } from "./network-reliability";
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
 import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
@@ -1052,58 +1051,38 @@ function GovernanceDataPage({ titleKey, descriptionKey, fields }: { titleKey: st
   </section>;
 }
 
+// Simplified on purpose (2026-09): this used to be a full ticket tracker
+// (owner/due date/status/priority/business justification/notes, plus a
+// separate save/export flow) -- the user found that too much for what
+// should just be a quick tip per finding. The formal remediation-tracking
+// audit trail (05-remediation/remediation-tracking.csv) is written by the
+// audit engine itself regardless of this page, so trimming this display
+// down to read-only doesn't remove that record.
 function RemediationPage({ onRetest }: { onRetest: () => void }) {
   const { t, locale } = useI18n();
-  const [report, setReport] = useState<LatestReport | null>(null);
-  const [pack, setPack] = useState<RemediationPack | null>(null);
-  const [message, setMessage] = useState("");
+  const [findings, setFindings] = useState<LocalizedFinding[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    Promise.all([invoke<LatestReport>("read_latest_report"), invoke<RemediationPack | null>("read_remediation_pack")])
-      .then(([latest, existing]) => { setReport(latest); setPack(existing); })
+    invoke<LatestReport>("read_latest_report")
+      .then((report) => setFindings(deduplicateFindings(report.findings).map((finding) => localizeFinding(finding, locale))))
       .catch((value) => setError(errorMessage(value)));
-  }, []);
-  const update = (index: number, patch: Partial<RemediationPack["tickets"][number]>) =>
-    setPack((current) => current ? {...current, tickets:current.tickets.map((ticket, item) => item === index ? {...ticket, ...patch} : ticket)} : current);
-  const save = async (next = pack) => {
-    if (!next) return;
-    setError(""); setMessage("");
-    try { await invoke("save_remediation_pack", { pack: next }); setPack(next); setMessage(t("remediation.saved")); }
-    catch (value) { setError(errorMessage(value)); }
-  };
-  const generate = async () => {
-    if (!report) return;
-    const next = buildRemediationPack(report.findings, locale, report.labDirectory);
-    await save(next);
-  };
-  const statuses: RemediationStatus[] = ["open","assigned","in_progress","remediated","accepted_risk","retest_required","verified"];
+  }, [locale]);
   return <section className="content-stack">
     <PageHeading eyebrow={t("toolbox.eyebrow")} title={t("remediation.title")} description={t("remediation.description")} />
     <p className="limitation">{t("remediation.safety")}</p>
+    {findings?.map((finding, index) => <article className="card compact remediation-tip" key={index}>
+      <div className="panel-heading">
+        <span className={`severity ${finding.severity.toLowerCase()}`}>{t(finding.severity.toLowerCase())}</span>
+        <strong>{localizeAssetLabel(finding.asset, locale)}</strong>
+      </div>
+      <p>{finding.localizedFinding}</p>
+      <p className="remediation-hint">💡 {finding.localizedRecommendedAction}</p>
+    </article>)}
+    {findings?.length === 0 && <p className="message">{t("remediation.noPack")}</p>}
+    {error && <RawDetail detail={error} />}
     <div className="actions">
-      <button className="primary" type="button" disabled={!report} onClick={generate}>{t("remediation.generate")}</button>
-      <button className="secondary" type="button" disabled={!pack} onClick={() => save()}>{t("toolbox.saveRemediation")}</button>
-      <button className="secondary" type="button" disabled={!pack} onClick={() => invoke("export_latest_lab_zip").then(() => setMessage(t("remediation.saved"))).catch((value) => setError(errorMessage(value)))}>{t("remediation.export")}</button>
       <button className="secondary" type="button" onClick={onRetest}>{t("remediation.retest")}</button>
     </div>
-    {pack?.tickets.map((ticket, index) => <article className="card compact remediation-editor" key={ticket.id}>
-      <h2>{ticket.id} · {ticket.asset}</h2>
-      <p>{ticket.localizedFinding}</p>
-      <p><strong>{ticket.localizedRecommendedAction}</strong></p>
-      <div className="form-grid">
-        <label>{t("toolbox.owner")}<input value={ticket.owner} onChange={(event) => update(index, { owner: event.target.value })} /></label>
-        <label>{t("toolbox.dueDate")}<input type="date" value={ticket.dueDate} onChange={(event) => update(index, { dueDate: event.target.value })} /></label>
-        <label>{t("toolbox.status")}<select value={ticket.status} onChange={(event) => update(index, { status:event.target.value as RemediationStatus })}>{statuses.map((status) => <option key={status} value={status}>{t(`remediation.status.${status}`)}</option>)}</select></label>
-        <label>{t("toolbox.priority")}<select value={ticket.priority} onChange={(event) => update(index, { priority:event.target.value })}><option value="High">{t("high")}</option><option value="Medium">{t("medium")}</option><option value="Low">{t("low")}</option><option value="Routine">{t("toolbox.priorityRoutine")}</option></select></label>
-        <label className="full-width">{t("toolbox.businessJustification")}<textarea value={ticket.businessJustification} onChange={(event) => update(index, { businessJustification:event.target.value })} /></label>
-        <label className="full-width">{t("toolbox.notes")}<textarea value={ticket.notes} onChange={(event) => update(index, { notes:event.target.value })} /></label>
-      </div>
-      <details><summary>{t("remediation.manualSteps")}</summary><ol>{ticket.manualSteps.map((step) => <li key={step}>{step}</li>)}</ol></details>
-      <details><summary>{t("remediation.validationSteps")}</summary><ol>{ticket.validationSteps.map((step) => <li key={step}>{step}</li>)}</ol></details>
-      <details><summary>{t("remediation.rollback")}</summary><ol>{ticket.rollbackConsiderations.map((step) => <li key={step}>{step}</li>)}</ol></details>
-    </article>)}
-    {!pack && !error && <p className="message">{t("remediation.noPack")}</p>}
-    {message && <p className="message success-message">{message}</p>}{error && <RawDetail detail={error} />}
   </section>;
 }
 
@@ -1989,7 +1968,7 @@ function SettingsPage() {
             <Code2 size={15} strokeWidth={2.1} /><span>{t("settings.sourceCode")}</span><em>GitHub</em>
           </button>
           <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "issues" })}>
-            <Bug size={15} strokeWidth={2.1} /><span>{t("settings.reportIssue")}</span><em>GitHub Issues</em>
+            <Bug size={15} strokeWidth={2.1} /><span>{t("settings.reportIssue")}</span><em>{t("settings.githubIssues")}</em>
           </button>
         </div>
       </div>
