@@ -10,6 +10,7 @@ import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkRe
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
 import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
 import packageJson from "../package.json";
+import { LayoutDashboard, Radar, ShieldCheck, FileText, Wrench, FileDown, Settings as SettingsIcon, Satellite, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Cable, Globe, Waypoints, Mail, Scale, Code2, Bug, type LucideIcon } from "lucide-react";
 import "./App.css";
 
 type Page = "overview" | "quickCheck" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
@@ -212,21 +213,21 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
-          <span className="brand-mark">LP</span>
+          <span className="brand-mark"><Satellite size={18} strokeWidth={2.25} /></span>
           <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
         </button>
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
-          <NavButton active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
-          <NavButton active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
+          <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
+          <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
           {sandboxed ? null : (
             <>
-              <NavButton active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
-              <NavButton active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
-              <NavButton active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
-              <NavButton active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+              <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
+              <NavButton icon={FileText} active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
+              <NavButton icon={Wrench} active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
+              <NavButton icon={FileDown} active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
             </>
           )}
-          <NavButton active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
+          <NavButton icon={SettingsIcon} active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
         </nav>
         <div className="sidebar-footer">
           <LanguageSelector />
@@ -298,8 +299,13 @@ function App() {
   );
 }
 
-function NavButton({ active, disabled, onClick, label }: { active: boolean; disabled: boolean; onClick: () => void; label: string }) {
-  return <button className={active ? "active" : ""} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
+function NavButton({ icon: Icon, active, disabled, onClick, label }: { icon?: LucideIcon; active: boolean; disabled: boolean; onClick: () => void; label: string }) {
+  return (
+    <button className={active ? "active" : ""} type="button" disabled={disabled} onClick={onClick}>
+      {Icon && <span className="nav-icon-chip"><Icon size={15} strokeWidth={2.2} /></span>}
+      <span>{label}</span>
+    </button>
+  );
 }
 
 function OverviewPage({
@@ -345,20 +351,20 @@ function OverviewPage({
         </section>
       </div>
       <div className="overview-cards">
-        <MetricCard title={t("overview.physicalStatus")} status={summary.physicalLanStatus} rows={[
+        <MetricCard icon={Cable} title={t("overview.physicalStatus")} status={summary.physicalLanStatus} rows={[
           [t("reliability.interface"), physical.activeInterface || t("status.unknown")],
           [t("overview.localIp"), physical.ipv4 ?? t("status.unknown")],
           [t("reliability.gateway"), physical.gatewayIp ?? t("status.unknown")],
           [t("reliability.gatewayLatency"), formatNullableMs(physical.gatewayPingAvgMs, t("status.unknown"))],
           [t("reliability.gatewayLoss"), formatNullablePercent(physical.gatewayPingLossPct, t("status.unknown"))],
         ]} />
-        <MetricCard title={t("overview.dnsStatus")} status={summary.dnsStatus} rows={[
+        <MetricCard icon={Globe} title={t("overview.dnsStatus")} status={summary.dnsStatus} rows={[
           [t("overview.dhcpDns"), (physical.dhcpDns ?? []).join(", ") || t("status.unknown")],
           [t("reliability.systemDns"), evidence.localControlPlane.systemDnsServers.join(", ") || t("status.unknown")],
           [t("overview.gatewayDns"), formatNullableMs(physical.gatewayDnsMs, t("status.unknown"))],
           [t("overview.dnsJudgement"), overlay.dnsViaOverlay ? t("overview.dnsTakenByOverlay") : t("overview.dnsDirect")],
         ]} />
-        <MetricCard title={t("overview.overlayStatus")} status={summary.overlayStatus} rows={[
+        <MetricCard icon={Waypoints} title={t("overview.overlayStatus")} status={summary.overlayStatus} rows={[
           ["Stash", overlay.stashDetected ? t("status.active") : t("status.stopped")],
           ["Tailscale", overlay.tailscaleRunning ? t("status.active") : t("status.stopped")],
           [t("reliability.defaultRoute"), overlay.defaultRouteInterface ?? t("status.unknown")],
@@ -371,16 +377,32 @@ function OverviewPage({
   );
 }
 
+const STATUS_ICONS: Partial<Record<ReliabilityStatus, LucideIcon>> = {
+  healthy: CheckCircle2,
+  warning: AlertTriangle,
+  critical: XCircle,
+  unknown: HelpCircle,
+};
+
 function StatusBadge({ status, label }: { status: ReliabilityStatus; label: string }) {
-  return <span className={`status-badge ${status}`}>{label}</span>;
+  const Icon = STATUS_ICONS[status];
+  return (
+    <span className={`status-badge ${status}`}>
+      {Icon && <Icon size={12} strokeWidth={2.5} />}
+      {label}
+    </span>
+  );
 }
 
-function MetricCard({ title, status, rows }: { title: string; status: ReliabilityStatus; rows: [string, string][] }) {
+function MetricCard({ icon: Icon, title, status, rows }: { icon?: LucideIcon; title: string; status: ReliabilityStatus; rows: [string, string][] }) {
   const { t } = useI18n();
   return (
     <section className="card compact metric-card">
       <div className="panel-heading">
-        <h2>{title}</h2>
+        <div className="panel-title">
+          {Icon && <span className={`icon-chip icon-chip-${status}`}><Icon size={16} strokeWidth={2.2} /></span>}
+          <h2>{title}</h2>
+        </div>
         <StatusBadge status={status} label={t(`reliability.status.${status}`)} />
       </div>
       <dl className="metric-list">
@@ -569,7 +591,14 @@ function AuthorizationPage({
   const [error, setError] = useState("");
   const [projectName, setProjectName] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const engineReady = Boolean(engine && (engine.scriptsReady || !engine.engineFound));
+  // Deliberately NOT gated on engine.scriptsReady: the only way to fix an
+  // outdated/incomplete engine is the Install/Update button on the NEXT page
+  // (EngineSetupPage), which already has its own correct gate before letting
+  // the user proceed further. Requiring scripts to already be ready HERE was
+  // a deadlock -- once any (even stale) engine directory exists, the user can
+  // never reach the page that updates it. Just require the check to have
+  // completed so we're not submitting against unknown state.
+  const engineChecked = Boolean(engine);
 
   useEffect(() => {
     invoke<EngineStatus>("check_engine").then(setEngine).catch((value) => setError(errorMessage(value)));
@@ -601,7 +630,7 @@ function AuthorizationPage({
             <Readiness label={t("authorization.latestLabReady")} ready={engine.latestLabExists} optional />
           </div>
         )}
-        {engine?.warnings.map((warning) => <RawDetail detail={warning} warning key={warning} />)}
+        {engine?.warnings.map((warning) => <EngineWarning warning={warning} key={warning} />)}
       </div>
       <div className="confirmation-list">
         <label className="confirmation card compact">
@@ -611,7 +640,7 @@ function AuthorizationPage({
       </div>
       {error && <RawDetail detail={error} />}
       <div className="actions">
-        <button className="primary" type="button" disabled={!confirmed || !projectName.trim() || !engineReady} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
+        <button className="primary" type="button" disabled={!confirmed || !projectName.trim() || !engineChecked} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
         <button className="secondary" type="button" onClick={onCancel}>{t("authorization.cancel")}</button>
       </div>
     </section>
@@ -652,7 +681,7 @@ function EngineSetupPage({ onBack, onContinue }: { onBack: () => void; onContinu
         <p className="path">{engine?.enginePath ?? t("common.checking")}</p>
         <p className="muted">{t("engine.installedVersion")}: {engine?.engineVersion ?? t("status.notInstalled")} · {t("engine.bundledVersion")}: {engine?.bundledEngineVersion ?? t("status.unknown")}</p>
         {!engine?.nmapAvailable && <p className="message">{t("nmapUnavailable")}</p>}
-        {engine?.warnings.map((warning) => <RawDetail detail={warning} warning key={warning} />)}
+        {engine?.warnings.map((warning) => <EngineWarning warning={warning} key={warning} />)}
       </div>
       {error && <RawDetail detail={error} />}
       <div className="actions">
@@ -1941,6 +1970,29 @@ function SettingsPage() {
   return (
     <section className="content-stack">
       <PageHeading eyebrow={t("settings.eyebrow")} title={t("settings.title")} description={t("settings.description")} />
+      <div className="card compact about-card">
+        <div className="about-header">
+          <span className="about-mark"><Satellite size={22} strokeWidth={2.1} /></span>
+          <div>
+            <h2>LANPilot Audit</h2>
+            <p className="muted">v{packageJson.version}</p>
+          </div>
+        </div>
+        <div className="about-links">
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "email" })}>
+            <Mail size={15} strokeWidth={2.1} /><span>{t("settings.contact")}</span><em>cqforest123@gmail.com</em>
+          </button>
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "license" })}>
+            <Scale size={15} strokeWidth={2.1} /><span>{t("settings.license")}</span><em>Apache-2.0</em>
+          </button>
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "source" })}>
+            <Code2 size={15} strokeWidth={2.1} /><span>{t("settings.sourceCode")}</span><em>GitHub</em>
+          </button>
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "issues" })}>
+            <Bug size={15} strokeWidth={2.1} /><span>{t("settings.reportIssue")}</span><em>GitHub Issues</em>
+          </button>
+        </div>
+      </div>
       <div className="card compact review-grid">
         <div><span>{t("settings.version")}</span><strong>{packageJson.version}</strong></div>
         <div><span>{t("settings.engineVersion")}</span><strong>{status?.engineVersion ?? status?.bundledEngineVersion ?? "—"}</strong></div>
@@ -1990,9 +2042,39 @@ function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: 
   return <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p className="lead">{description}</p></div>;
 }
 
-function RawDetail({ detail, warning = false }: { detail: string; warning?: boolean }) {
+// The engine backend returns a small, fixed set of English sentences for
+// known conditions (see check_engine() in src-tauri/src/lib.rs). Map each one
+// to a real translation key so the visible headline is localized, while the
+// exact backend string stays available in the raw detail below it -- that
+// exact string is still useful (e.g. to search this file when reporting a
+// bug), just not the only thing shown to a non-English-reading user. Genuine
+// subprocess stdout/stderr elsewhere in the app is NOT in this map on
+// purpose: that really is raw external output and has no fixed English text
+// to translate.
+const ENGINE_WARNING_KEYS: Record<string, string> = {
+  "Local audit engine directory was not found.": "engineWarning.engineNotFound",
+  "One or more approved audit scripts are missing or not executable.": "engineWarning.scriptsNotReady",
+  "nmap is not available on the fixed audit PATH.": "engineWarning.nmapUnavailable",
+  "No latest audit lab is available yet.": "engineWarning.noLatestLab",
+  "Using the development engine fallback.": "engineWarning.developmentFallback",
+  "A bundled engine update is available.": "engineWarning.updateAvailable",
+  "The installed engine failed its integrity check.": "engineWarning.integrityCheckFailed",
+};
+
+function EngineWarning({ warning }: { warning: string }) {
   const { t } = useI18n();
-  return <details className={`message ${warning ? "" : "error"}`}><summary>{t(warning ? "status.warning" : "common.error")}</summary><pre>{t("common.rawDetail")}: {"\n"}{detail}</pre></details>;
+  const key = ENGINE_WARNING_KEYS[warning];
+  return <RawDetail detail={warning} warning label={key ? t(key) : undefined} />;
+}
+
+function RawDetail({ detail, warning = false, label }: { detail: string; warning?: boolean; label?: string }) {
+  const { t } = useI18n();
+  return (
+    <details className={`message ${warning ? "" : "error"}`}>
+      <summary>{label ?? t(warning ? "status.warning" : "common.error")}</summary>
+      <pre>{t("common.rawDetail")}: {"\n"}{detail}</pre>
+    </details>
+  );
 }
 
 function Guardrail() {
