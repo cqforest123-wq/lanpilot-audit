@@ -812,13 +812,7 @@ fn install_bundled_engine(app: tauri::AppHandle) -> Result<EngineStatus, String>
 }
 
 #[tauri::command]
-fn authorize_audit(
-    project_name: String,
-    execution_state: tauri::State<'_, AuditExecutionState>,
-) -> Result<(), String> {
-    if project_name.trim().is_empty() {
-        return Err("Project name is required before authorization.".to_string());
-    }
+fn authorize_audit(execution_state: tauri::State<'_, AuditExecutionState>) -> Result<(), String> {
     execution_state.authorize();
     Ok(())
 }

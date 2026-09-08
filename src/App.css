@@ -449,6 +449,15 @@ pre {
 .latency-track .warning { background: #d99525; }
 .latency-track .critical { background: #d95151; }
 .latency-track .unknown { background: #a6b2bc; }
+.severity-chart-rows { display: grid; gap: 12px; margin-top: 14px; }
+.severity-chart-row { display: grid; grid-template-columns: 70px 1fr 34px; gap: 14px; align-items: center; }
+.severity-chart-label { color: #405564; font-size: 13px; font-weight: 750; }
+.severity-chart-value { color: #405564; font-size: 13px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.severity-chart-track { height: 14px; border-radius: 999px; background: #edf2f4; overflow: hidden; }
+.severity-chart-fill { display: block; height: 100%; border-radius: inherit; min-width: 4px; transition: width 320ms ease; }
+.severity-chart-fill.high { background: #d95151; }
+.severity-chart-fill.medium { background: #d99525; }
+.severity-chart-fill.low { background: #3b8fb0; }
 .interface-selector { box-shadow: none; }
 .interface-list { display: grid; gap: 9px; }
 .interface-option {

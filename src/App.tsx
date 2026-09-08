@@ -138,12 +138,6 @@ interface AuditStep {
   result?: AuditStepResult;
 }
 
-interface AuthorizationDetails {
-  projectName: string;
-  site: string;
-  notes: string;
-}
-
 const STEP_DEFINITIONS: Omit<AuditStep, "status" | "result">[] = [
   { id: "init_lab", labelKey: "step.initLab", descriptionKey: "step.initLabDescription" },
   { id: "baseline", labelKey: "step.baseline", descriptionKey: "step.baselineDescription" },
@@ -192,7 +186,6 @@ function App() {
   }, []);
   const [auditRunning, setAuditRunning] = useState(false);
   const [authorized, setAuthorized] = useState(false);
-  const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [auditInterface, setAuditInterface] = useState("");
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
   const [networkResult, setNetworkResult] = useState<NetworkReliabilityRun | null>(null);
@@ -200,7 +193,6 @@ function App() {
   const startAuthorization = () => {
     if (auditRunning) return;
     setAuthorized(false);
-    setDetails(null);
     setPage("authorization");
   };
 
@@ -254,9 +246,8 @@ function App() {
         {page === "authorization" && (
           <AuthorizationPage
             onCancel={() => navigate("overview")}
-            onConfirm={async (authorizationDetails) => {
-              await invoke("authorize_audit", { projectName: authorizationDetails.projectName });
-              setDetails(authorizationDetails);
+            onConfirm={async () => {
+              await invoke("authorize_audit");
               setAuthorized(true);
               setPage("engine");
             }}
@@ -265,8 +256,8 @@ function App() {
         {page === "engine" && authorized && (
           <EngineSetupPage onBack={startAuthorization} onContinue={() => setPage("interface")} />
         )}
-        {page === "interface" && authorized && details && (
-          <InterfacePage details={details} selected={auditInterface} onSelect={setAuditInterface} onBack={startAuthorization} onContinue={() => setPage("run")} />
+        {page === "interface" && authorized && (
+          <InterfacePage selected={auditInterface} onSelect={setAuditInterface} onBack={startAuthorization} onContinue={() => setPage("run")} />
         )}
         {page === "run" && authorized && (
           <RunPage
@@ -583,12 +574,11 @@ function AuthorizationPage({
   onConfirm,
 }: {
   onCancel: () => void;
-  onConfirm: (details: AuthorizationDetails) => Promise<void>;
+  onConfirm: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [error, setError] = useState("");
-  const [projectName, setProjectName] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   // Deliberately NOT gated on engine.scriptsReady: the only way to fix an
   // outdated/incomplete engine is the Install/Update button on the NEXT page
@@ -606,7 +596,7 @@ function AuthorizationPage({
   const submit = async () => {
     setError("");
     try {
-      await onConfirm({ projectName: projectName.trim(), site: "", notes: "" });
+      await onConfirm();
     } catch (value) {
       setError(errorMessage(value));
     }
@@ -615,9 +605,6 @@ function AuthorizationPage({
   return (
     <section className="content-stack">
       <PageHeading eyebrow={t("authorization.requiredBeforeEveryRealAudit")} title={t("authorization.title")} description={t("authorization.description")} />
-      <div className="form-grid">
-        <label>{t("authorization.projectName")} <strong>*</strong><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
-      </div>
       <div className="card compact">
         <h2>{t("authorization.localEngineReadiness")}</h2>
         {!engine && !error && <p className="muted">{t("authorization.checkingEngine")}</p>}
@@ -639,7 +626,7 @@ function AuthorizationPage({
       </div>
       {error && <RawDetail detail={error} />}
       <div className="actions">
-        <button className="primary" type="button" disabled={!confirmed || !projectName.trim() || !engineChecked} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
+        <button className="primary" type="button" disabled={!confirmed || !engineChecked} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
         <button className="secondary" type="button" onClick={onCancel}>{t("authorization.cancel")}</button>
       </div>
     </section>
@@ -697,7 +684,7 @@ function Readiness({ label, ready, optional = false }: { label: string; ready: b
   return <div className={`readiness ${ready ? "success-text" : optional ? "muted" : "error-text"}`}><span className="status-dot" />{label}: {ready ? t("status.ready") : optional ? t("status.unavailable") : t("common.required")}</div>;
 }
 
-function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { details: AuthorizationDetails; selected: string; onSelect: (value: string) => void; onBack: () => void; onContinue: () => void }) {
+function InterfacePage({ selected, onSelect, onBack, onContinue }: { selected: string; onSelect: (value: string) => void; onBack: () => void; onContinue: () => void }) {
   const { t } = useI18n();
   const [interfaces, setInterfaces] = useState<AuditInterface[]>([]);
   const [error, setError] = useState("");
@@ -716,8 +703,6 @@ function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { de
     <section className="content-stack">
       <PageHeading eyebrow={t("interface.eyebrow")} title={t("interface.title")} description={t("interface.description")} />
       <div className="card compact review-grid">
-        <div><span>{t("interface.project")}</span><strong>{details.projectName}</strong></div>
-        <div><span>{t("interface.siteOrganization")}</span><strong>{details.site || t("common.notProvided")}</strong></div>
         <div><span>{t("interface.executionMode")}</span><strong>{t("run.stopOnFailure")}</strong></div>
         <div><span>{t("interface.selectionRule")}</span><strong>{t("interface.preferPhysical")}</strong></div>
       </div>
@@ -938,6 +923,7 @@ function ReportPage({ initialReport }: { initialReport: LatestReport | null }) {
         <>
           {report.missingFiles.length > 0 && <p className="message error">{t("missingFiles")}: {report.missingFiles.join(", ")}</p>}
           <SummaryCards summary={normalizedSummary(report)} />
+          <SeverityChart summary={normalizedSummary(report)} />
           <div className="report-tabs" role="tablist">
             <button className={view === "localized" ? "active" : ""} type="button" role="tab" aria-selected={view === "localized"} onClick={() => setView("localized")}>{copy.localizedView}</button>
             <button className={view === "raw" ? "active" : ""} type="button" role="tab" aria-selected={view === "raw"} onClick={() => setView("raw")}>{copy.rawView}</button>
@@ -958,6 +944,38 @@ function SummaryCards({ summary }: { summary: ReportSummary }) {
     [t("openServiceHosts"), summary.openServiceHosts, ""], [t("gatewayPosture"), localizeGatewayStatus(summary.gatewayPostureStatus, locale), ""],
   ];
   return <div className="summary-grid">{cards.map(([label, value, tone]) => <div className={`summary-card card ${tone}`} key={label}><span>{label}</span><strong>{value ?? copy.unknown}</strong></div>)}</div>;
+}
+
+// A plain bar chart for the one part of the report that is genuinely
+// count-shaped (finding severity). Hand-rolled div/CSS bars rather than a
+// charting library, matching how LatencyVisualization and Quick Check's
+// ping chart already do it elsewhere in this codebase -- no new dependency
+// for three bars.
+function SeverityChart({ summary }: { summary: ReportSummary }) {
+  const { t } = useI18n();
+  const rows: [string, number, string][] = [
+    [t("high"), summary.highCount ?? 0, "high"],
+    [t("medium"), summary.mediumCount ?? 0, "medium"],
+    [t("low"), summary.lowCount ?? 0, "low"],
+  ];
+  if (rows.every(([, value]) => value === 0)) return null;
+  const max = Math.max(1, ...rows.map(([, value]) => value));
+  return (
+    <section className="card compact severity-chart">
+      <h2>{t("report.severityChart")}</h2>
+      <div className="severity-chart-rows">
+        {rows.map(([label, value, tone]) => (
+          <div className="severity-chart-row" key={label}>
+            <span className="severity-chart-label">{label}</span>
+            <div className="severity-chart-track">
+              <div className={`severity-chart-fill ${tone}`} style={{ width: `${(value / max) * 100}%` }} />
+            </div>
+            <span className="severity-chart-value">{value}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function normalizedSummary(report: LatestReport): ReportSummary {
@@ -1120,7 +1138,7 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
     setMessage("");
     setResult(null);
     try {
-      await invoke("authorize_audit", { projectName: mode === "quick" ? "Path Report Quick Check" : "Path Report Deep Diagnosis" });
+      await invoke("authorize_audit");
       const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check", { mode });
       const completed = { ...next, doctorMode: mode };
       setResult(completed);

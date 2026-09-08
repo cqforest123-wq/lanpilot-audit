@@ -89,7 +89,6 @@ describe("audit authorization and failure flow", () => {
     const continueButton = screen.getByRole("button", { name: "Confirm Authorization" });
     expect(continueButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText(/Project name/), "Test audit");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     expect(continueButton).toBeEnabled();
     await user.click(continueButton);
@@ -131,7 +130,6 @@ describe("audit authorization and failure flow", () => {
     const confirmButton = screen.getByRole("button", { name: "Confirm Authorization" });
     expect(confirmButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText(/Project name/), "Test audit");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
 
     expect(confirmButton).toBeEnabled();
@@ -193,7 +191,6 @@ describe("audit authorization and failure flow", () => {
 
     await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
-    await user.type(screen.getByLabelText(/Project name/), "Test audit");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     await user.click(screen.getByRole("button", { name: "Confirm Authorization" }));
     await user.click(screen.getByRole("button", { name: "Continue to Interface" }));
@@ -334,10 +331,8 @@ describe("localization", () => {
     render(<I18nProvider><App /></I18nProvider>);
     await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
-    await user.type(screen.getByLabelText(/Project name/), "Persistent project");
     await user.click(screen.getAllByRole("checkbox")[0]);
     await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-CN");
-    expect(screen.getByDisplayValue("Persistent project")).toBeVisible();
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   });
 
@@ -426,6 +421,30 @@ const networkReliabilityFixture = {
   outputDirectory: "/Users/test/lanpilot-audit-latest/08-network-reliability",
 };
 
+describe("report severity chart", () => {
+  it("shows a bar per severity level sized to its count, and nothing when there are no findings", async () => {
+    invokeMock.mockResolvedValue(localizedReportFixture);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Reports" }));
+
+    await screen.findByText("Findings by severity");
+    const rows = document.querySelectorAll(".severity-chart-row");
+    expect(rows).toHaveLength(3);
+    const highFill = document.querySelector(".severity-chart-fill.high") as HTMLElement;
+    // The fixture's High count is the largest of the three, so its bar must
+    // be the full-width (100%) reference bar the others are scaled against.
+    expect(highFill.style.width).toBe("100%");
+
+    cleanup();
+    invokeMock.mockResolvedValue({ ...localizedReportFixture, findings: [], summary: { ...localizedReportFixture.summary, highCount: 0, mediumCount: 0, lowCount: 0 } });
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Reports" }));
+    await waitFor(() => expect(document.querySelector(".summary-grid")).toBeInTheDocument());
+    expect(screen.queryByText("Findings by severity")).not.toBeInTheDocument();
+  });
+});
+
 describe("localized report view", () => {
   it("renders a fully localized Chinese main view, deduplicates findings, and preserves raw evidence", async () => {
     localStorage.setItem("lanpilot.locale", "zh-CN");
@@ -482,7 +501,6 @@ describe("full guided workflow localization", () => {
     }
     expect(authorizationText).toContain("nmap");
 
-    await user.type(screen.getByLabelText(/项目名称/), "本地化测试");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     await user.click(screen.getByRole("button", { name: "确认授权" }));
     await screen.findByText("本地优先引擎");
@@ -503,7 +521,6 @@ describe("full guided workflow localization", () => {
     render(<I18nProvider><App /></I18nProvider>);
     await user.click(screen.getAllByRole("button", { name: locale === "ja" ? "ガバナンス監査を実行" : "거버넌스 감사 실행" })[0]);
     expect(await screen.findByText(authorizationHeading)).toBeVisible();
-    await user.type(screen.getByLabelText(locale === "ja" ? /プロジェクト名/ : /프로젝트 이름/), "test");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     await user.click(screen.getByRole("button", { name: locale === "ja" ? "承認を確認" : "승인 확인" }));
     expect(await screen.findByText(engineHeading)).toBeVisible();
