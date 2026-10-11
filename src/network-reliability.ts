@@ -323,8 +323,8 @@ export function compareNetworkBaselines(previous: NetworkReliabilityEvidence, cu
 export function buildNetworkReliabilityMarkdown(diagnosis: NetworkReliabilityDiagnosis, evidence: NetworkReliabilityEvidence, language: "en" | "zh-CN" = "en"): string {
   const zh = language === "zh-CN";
   const heading = zh
-    ? ["# 网络医生报告", "## 运行元数据", "## 总体诊断", "## 当前网络路径", "## 故障点", "## 影响判断", "## 关键证据", "## 根因候选", "## 反向证据", "## 处理建议", "## 复测方法", "## 物理网络", "## DNS", "## Overlay / 代理 / VPN", "## 外部网络", "## 本机监听服务", "## 原始证据"]
-    : ["# Network Doctor Report", "## Run Metadata", "## Overall Diagnosis", "## Current Network Path", "## Fault Point", "## Impact", "## Key Evidence", "## Root Cause Candidates", "## Evidence Against", "## Troubleshooting Advice", "## Retest Plan", "## Physical LAN", "## DNS", "## Overlay / Proxy / VPN", "## External Internet", "## Local Listening Services", "## Raw Evidence"];
+    ? ["# 链路报告", "## 运行元数据", "## 总体诊断", "## 当前网络路径", "## 故障点", "## 影响判断", "## 关键证据", "## 根因候选", "## 反向证据", "## 处理建议", "## 复测方法", "## 物理网络", "## DNS", "## Overlay / 代理 / VPN", "## 外部网络", "## 本机监听服务", "## 原始证据"]
+    : ["# Path Report", "## Run Metadata", "## Overall Diagnosis", "## Current Network Path", "## Fault Point", "## Impact", "## Key Evidence", "## Root Cause Candidates", "## Evidence Against", "## Troubleshooting Advice", "## Retest Plan", "## Physical LAN", "## DNS", "## Overlay / Proxy / VPN", "## External Internet", "## Local Listening Services", "## Raw Evidence"];
   const list = (values: string[]) => values.map((value) => `- ${value}`).join("\n") || "- None";
   const overlayInterface = evidence.overlay.defaultRouteInterface?.startsWith("utun") ? evidence.overlay.defaultRouteInterface : "none";
   return `${heading[0]}

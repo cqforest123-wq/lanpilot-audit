@@ -50,14 +50,17 @@ function verifyBundledManifest() {
   console.log(`Bundled engine integrity manifest is valid for ${readFileSync(join(destination, "VERSION"), "utf8").trim()}.`);
 }
 
-if (!existsSync(source)) {
+const sourceVersionPath = join(source, "VERSION");
+
+if (!existsSync(sourceVersionPath)) {
   if (checkOnly) {
+    console.warn(`Engine source is unavailable or incomplete at ${source}; checking bundled manifest only.`);
     verifyBundledManifest();
     process.exit(0);
   }
   throw new Error(`LANPilot engine source not found: ${source}`);
 }
-const sourceVersion = readFileSync(join(source, "VERSION"), "utf8").trim();
+const sourceVersion = readFileSync(sourceVersionPath, "utf8").trim();
 const manifest = files.map((file) => {
   const sourceFile = join(source, file);
   if (!existsSync(sourceFile)) throw new Error(`Required engine file is missing: ${sourceFile}`);

@@ -18,7 +18,7 @@ const fixtures = Object.entries(modules).map(([path, fixture]) => ({
   fixture,
 }));
 
-describe("Network Doctor evidence-based diagnosis", () => {
+describe("Path Report evidence-based diagnosis", () => {
   it("loads all required public fixtures", () => {
     expect(fixtures.map((item) => item.name).sort()).toEqual([
       "application-slow-ttfb.json",

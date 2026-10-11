@@ -1,7 +1,7 @@
 # Open Source Security Scan Report
 
 - Current tree blockers: 0
-- Current tree review items: 2
+- Current tree review items: 4
 - Git history matches: 0
 - External tools: gitleaks: not installed; trufflehog: not installed
 
@@ -9,6 +9,8 @@
 
 - REVIEW: docs/release/gatekeeper-check.md (Developer ID personal identity)
 - REVIEW: src-tauri/src/lib.rs (MAC address)
+- REVIEW: src-tauri/src/quick_check/neighbours.rs (MAC address)
+- REVIEW: src-tauri/src/quick_check/oui.rs (MAC address)
 
 ## Git History
 

@@ -8,9 +8,10 @@ import { workflowMessages } from "./workflow";
 import { toolboxMessages } from "./toolbox";
 import { remediationMessages } from "./remediation";
 import { networkReliabilityMessages } from "./network-reliability";
+import { quickCheckMessages } from "./quick-check";
 
 const localeMessages: Record<Locale, Messages> = { en, "zh-CN": zhCN, "zh-TW": zhTW, ja, ko, de, fr, es, "pt-BR": ptBR, it, nl };
-export const messages = Object.fromEntries(supportedLocales.map((locale) => [locale, { ...localeMessages[locale], ...workflowMessages[locale], ...toolboxMessages[locale], ...remediationMessages[locale], ...networkReliabilityMessages[locale] }])) as Record<Locale, Messages>;
+export const messages = Object.fromEntries(supportedLocales.map((locale) => [locale, { ...localeMessages[locale], ...workflowMessages[locale], ...toolboxMessages[locale], ...remediationMessages[locale], ...networkReliabilityMessages[locale], ...quickCheckMessages[locale] }])) as Record<Locale, Messages>;
 export function resolveLocale(value?: string | null): Locale {
   const raw = (value || "").replace("_", "-");
   if (/^zh($|-Hans|-CN)/i.test(raw)) return "zh-CN";
@@ -19,17 +20,21 @@ export function resolveLocale(value?: string | null): Locale {
   const match = supportedLocales.find((locale) => raw.toLowerCase() === locale.toLowerCase() || raw.toLowerCase().startsWith(`${locale.toLowerCase()}-`));
   return match || "en";
 }
-const Context = createContext({ locale: "en" as Locale, setLocale: (_locale: Locale) => {}, t: (key: string) => messages.en[key] || key });
+type Translate = (key: string, params?: Record<string, string>) => string;
+/** Substitutes `{name}` placeholders; a missing key is left visible rather than blanked. */
+const interpolate = (text: string, params?: Record<string, string>) =>
+  params ? text.replace(/\{(\w+)\}/g, (match, name: string) => params[name] ?? match) : text;
+const Context = createContext({ locale: "en" as Locale, setLocale: (_locale: Locale) => {}, t: ((key, params) => interpolate(messages.en[key] || key, params)) as Translate });
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, updateLocale] = useState<Locale>(() => resolveLocale(localStorage.getItem("lanpilot.locale") || navigator.language));
   const value = useMemo(() => ({
     locale,
     setLocale: (next: Locale) => { localStorage.setItem("lanpilot.locale", next); updateLocale(next); },
-    t: (key: string) => {
+    t: ((key, params) => {
       const translated = messages[locale][key];
       if (!translated && import.meta.env.DEV && locale !== "en") console.warn(`Missing ${locale} translation: ${key}`);
-      return translated || en[key] || key;
-    },
+      return interpolate(translated || en[key] || key, params);
+    }) as Translate,
   }), [locale]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

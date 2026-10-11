@@ -1,3 +1,5 @@
+pub mod quick_check;
+
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -791,19 +793,26 @@ fn install_bundled_engine(app: tauri::AppHandle) -> Result<EngineStatus, String>
     let source = bundled_engine_path(&app)?;
     let destination = engine_path()?;
     verify_engine_manifest(&source)?;
+    // Wipe any existing installation first. This is an install/UPDATE, not a
+    // merge: an older installed engine can have files the new bundled engine
+    // no longer ships (renamed/split/removed scripts across versions). Without
+    // this, those stale files linger after every copy and the very next
+    // manifest check on `destination` fails with "contains files not
+    // represented by its integrity manifest" -- permanently, since nothing
+    // ever removes them. The destination is entirely engine-owned (audit run
+    // data lives under a separate `lanpilot-audit-latest` directory), so a
+    // clean wipe-and-recopy is safe.
+    if destination.exists() {
+        fs::remove_dir_all(&destination)
+            .map_err(|error| format!("Unable to remove the previous engine installation: {error}"))?;
+    }
     copy_engine_directory(&source, &destination)?;
     verify_engine_manifest(&destination)?;
     check_engine()
 }
 
 #[tauri::command]
-fn authorize_audit(
-    project_name: String,
-    execution_state: tauri::State<'_, AuditExecutionState>,
-) -> Result<(), String> {
-    if project_name.trim().is_empty() {
-        return Err("Project name is required before authorization.".to_string());
-    }
+fn authorize_audit(execution_state: tauri::State<'_, AuditExecutionState>) -> Result<(), String> {
     execution_state.authorize();
     Ok(())
 }
@@ -1490,6 +1499,42 @@ fn open_engine_folder() -> Result<(), String> {
         ));
     }
     open_fixed_folder(&engine)
+}
+
+/// Open one of a small, fixed set of About-page links in the default browser
+/// or mail client. Same discipline as elsewhere in this file: the URL is
+/// never accepted as a string from the frontend, only a `link_id` matched
+/// against a hardcoded allowlist here, so the frontend cannot make this open
+/// an arbitrary address.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn open_about_link(link_id: &str) -> Result<(), String> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{NSString, NSURL};
+
+    let url = match link_id {
+        "source" => "https://github.com/cqforest123-wq/lanpilot-audit",
+        "issues" => "https://github.com/cqforest123-wq/lanpilot-audit/issues",
+        "license" => "https://github.com/cqforest123-wq/lanpilot-audit/blob/main/LICENSE",
+        "email" => "mailto:cqforest123@gmail.com",
+        _ => return Err(format!("Unknown about link: {link_id}")),
+    };
+
+    let string = NSString::from_str(url);
+    let Some(target) = NSURL::URLWithString(&string) else {
+        return Err("Unable to construct link URL.".to_string());
+    };
+    if NSWorkspace::sharedWorkspace().openURL(&target) {
+        Ok(())
+    } else {
+        Err("Unable to open the link.".to_string())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn open_about_link(_link_id: &str) -> Result<(), String> {
+    Err("Opening links is only supported on macOS.".to_string())
 }
 
 fn add_directory_to_zip(
@@ -3107,6 +3152,329 @@ fn collect_network_reliability(
     })
 }
 
+/// Cheap enough for the shell to call on mount, so engine-backed navigation
+/// can be hidden before the user clicks into an empty page.
+#[tauri::command]
+fn is_sandboxed() -> bool {
+    quick_check::netinfo::is_sandboxed()
+}
+
+#[tauri::command]
+fn read_local_network() -> quick_check::netinfo::LocalNetwork {
+    quick_check::netinfo::snapshot()
+}
+
+/// Kept out of `read_local_network` on purpose: this one waits on two DNS
+/// round trips, and the overview must paint immediately rather than block on
+/// the network.
+#[tauri::command]
+async fn read_public_egress() -> Result<quick_check::egress::Egress, String> {
+    tauri::async_runtime::spawn_blocking(quick_check::egress::lookup)
+        .await
+        .map_err(|error| format!("Egress worker failed: {error}"))
+}
+
+/// Async and separate from the overview for the same reason as the egress
+/// lookup: it waits on the network, and the screen must not.
+#[tauri::command]
+async fn check_clock() -> Result<quick_check::ntp::ClockCheck, String> {
+    tauri::async_runtime::spawn_blocking(quick_check::ntp::best_available)
+        .await
+        .map_err(|error| format!("Clock worker failed: {error}"))
+}
+
+/// Passive: reads the kernel's neighbour table and sends nothing.
+#[tauri::command]
+async fn list_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbours::Neighbour>, String> {
+    tauri::async_runtime::spawn_blocking(move || quick_check::neighbours::list(resolve_names))
+        .await
+        .map_err(|error| format!("Neighbour worker failed: {error}"))
+}
+
+/// The subnet this Mac is attached to, as canonical CIDR.
+fn current_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
+    let interfaces = quick_check::netinfo::interfaces();
+    let active = interfaces
+        .iter()
+        .find(|entry| entry.kind == quick_check::netinfo::InterfaceKind::Physical && entry.is_up)
+        .ok_or_else(|| "sweep:noLocalSubnet".to_string())?;
+    let address: std::net::Ipv4Addr =
+        active.ipv4.parse().map_err(|_| "sweep:noLocalSubnet".to_string())?;
+    let subnet = quick_check::scope::canonical_subnet(address, active.prefix)
+        .ok_or_else(|| "sweep:noLocalSubnet".to_string())?;
+    Ok((address, active.prefix, subnet))
+}
+
+fn scope_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_data_dir().map_err(|error| format!("scope:noDataDir:{error}"))
+}
+
+#[tauri::command]
+fn read_scope(app: tauri::AppHandle) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    Ok(quick_check::scope::read(&scope_dir(&app)?))
+}
+
+/// Records that the operator says they may assess this network. The subnet is
+/// taken from the live interface, never from the caller, so consent cannot be
+/// recorded for a network the Mac is not on.
+#[tauri::command]
+fn authorize_current_subnet(
+    app: tauri::AppHandle,
+    note: Option<String>,
+) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    let (_, _, subnet) = current_subnet()?;
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    quick_check::scope::authorize(&scope_dir(&app)?, &subnet, note, now)
+}
+
+#[tauri::command]
+fn revoke_subnet(
+    app: tauri::AppHandle,
+    subnet: String,
+) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    quick_check::scope::revoke(&scope_dir(&app)?, &subnet)
+}
+
+/// What the sweep would cover, and whether it has been authorized yet.
+#[tauri::command]
+fn describe_sweep_scope(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let (_, _, subnet) = current_subnet()?;
+    let authorized =
+        quick_check::scope::is_authorized(&quick_check::scope::read(&scope_dir(&app)?), &subnet);
+    Ok(serde_json::json!({ "subnet": subnet, "authorized": authorized }))
+}
+
+/// Sweeps only the subnet this Mac is attached to, and only once the operator
+/// has said they may assess it. Every other tool acts on an address the user
+/// typed; this one reaches addresses they did not name, on a segment that is
+/// not always theirs.
+#[tauri::command]
+async fn sweep_local_subnet(
+    app: tauri::AppHandle,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::sweep::SweepResult, String> {
+    let (address, prefix, subnet) = current_subnet()?;
+
+    let records = quick_check::scope::read(&scope_dir(&app)?);
+    if !quick_check::scope::is_authorized(&records, &subnet) {
+        return Err(format!("scope:notAuthorized:{subnet}"));
+    }
+
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::sweep::run(address, prefix, |done, total| {
+            let _ = app.emit("quick-check-sweep", (done, total));
+        })
+    })
+    .await
+    .map_err(|error| format!("Sweep worker failed: {error}"))?
+    .map_err(|refusal| format!("sweep:{}", match refusal {
+        quick_check::sweep::SweepRefusal::NoLocalSubnet => "noLocalSubnet",
+        quick_check::sweep::SweepRefusal::SubnetTooLarge => "subnetTooLarge",
+    }))
+}
+
+#[tauri::command]
+async fn inspect_device(
+    app: tauri::AppHandle,
+    target: String,
+    profile: String,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::devices::DeviceReport, String> {
+    use quick_check::devices::DeviceProfile;
+
+    // Only the fixed profiles exist; an arbitrary port list is never accepted.
+    let profile = match profile.as_str() {
+        "camera" => DeviceProfile::Camera,
+        "switch" => DeviceProfile::Switch,
+        "generic" => DeviceProfile::Generic,
+        _ => return Err("device:unknownProfile".to_string()),
+    };
+    let address = quick_check::runner::resolve_raw(&target)?;
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::devices::inspect(address, profile, |kind, port| {
+            let _ = app.emit("quick-check-device", (kind, port));
+        })
+    })
+    .await
+    .map_err(|error| format!("Device worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn check_segment_size(
+    target: String,
+    port: u16,
+) -> Result<quick_check::mss::SegmentCheck, String> {
+    if port == 0 {
+        return Err("target:notHostnameOrIp".to_string());
+    }
+    let address = quick_check::runner::resolve_raw(&target)?;
+    tauri::async_runtime::spawn_blocking(move || quick_check::mss::check(address, port))
+        .await
+        .map_err(|error| format!("Segment worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn open_device_page(target: String, port: u16) -> Result<(), String> {
+    let address = quick_check::runner::resolve_raw(&target)?;
+    quick_check::devices::open_management_page(address, port).map_err(|code| format!("open:{code}"))
+}
+
+#[tauri::command]
+async fn run_traceroute(
+    app: tauri::AppHandle,
+    target: String,
+    resolve_names: bool,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::traceroute::Trace, String> {
+    let address = quick_check::runner::resolve_raw(&target)?;
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::traceroute::run(address, resolve_names, |hop| {
+            let _ = app.emit("quick-check-hop", hop);
+        })
+    })
+    .await
+    .map_err(|error| format!("Traceroute worker failed: {error}"))?
+}
+
+#[tauri::command]
+async fn check_tcp_port(target: String, port: u16) -> Result<quick_check::port::PortResult, String> {
+    // Port 0 is not a service; refuse it rather than reporting a meaningless result.
+    if port == 0 {
+        return Err("target:notHostnameOrIp".to_string());
+    }
+    let address = quick_check::runner::resolve_raw(&target)?;
+    tauri::async_runtime::spawn_blocking(move || quick_check::port::check(address, port))
+        .await
+        .map_err(|error| format!("Port worker failed: {error}"))
+}
+
+#[tauri::command]
+async fn diagnose_dns(name: String) -> Result<quick_check::dns::DnsDiagnosis, String> {
+    // Reuse the same whitelist: only a real host name is worth resolving.
+    match quick_check::target::parse_target(&name) {
+        Ok(quick_check::target::QuickTarget::Hostname(host)) => {
+            tauri::async_runtime::spawn_blocking(move || {
+                let servers: Vec<std::net::Ipv4Addr> = quick_check::netinfo::dns_servers()
+                    .iter()
+                    .filter_map(|server| server.parse().ok())
+                    .collect();
+                quick_check::dns::diagnose(&host, &servers)
+            })
+            .await
+            .map_err(|error| format!("DNS worker failed: {error}"))
+        }
+        // An IP literal needs no lookup; saying so beats a confusing empty result.
+        Ok(quick_check::target::QuickTarget::Ip(_)) => Err("dns:alreadyAnAddress".to_string()),
+        Err(error) => Err(format!("target:{}", error.code())),
+    }
+}
+
+/// Cancellation flag for the running watch, shared with the UI's stop button.
+#[derive(Default)]
+struct WatchState {
+    active: AtomicBool,
+}
+
+#[tauri::command]
+fn stop_watch(watch: tauri::State<'_, WatchState>) {
+    watch.active.store(false, Ordering::SeqCst);
+}
+
+#[tauri::command]
+async fn start_watch(
+    app: tauri::AppHandle,
+    target: String,
+    interval_ms: u64,
+    watch: tauri::State<'_, WatchState>,
+) -> Result<quick_check::monitor::WatchSummary, String> {
+    let address = quick_check::runner::resolve_raw(&target)?;
+
+    // Clamp rather than trust: the interval reaches a send loop, so a small
+    // value from a modified front end must not become a packet flood.
+    let interval = std::time::Duration::from_millis(interval_ms.clamp(500, 60_000));
+
+    if watch.active.swap(true, Ordering::SeqCst) {
+        return Err("watch:alreadyRunning".to_string());
+    }
+
+    let result = tauri::async_runtime::spawn_blocking({
+        let app = app.clone();
+        move || run_watch_loop(&app, address, interval)
+    })
+    .await
+    .map_err(|error| format!("Watch worker failed: {error}"));
+
+    app.state::<WatchState>().active.store(false, Ordering::SeqCst);
+    result?
+}
+
+fn run_watch_loop(
+    app: &tauri::AppHandle,
+    address: std::net::IpAddr,
+    interval: std::time::Duration,
+) -> Result<quick_check::monitor::WatchSummary, String> {
+    use quick_check::icmp::{PingSocket, ProbeOutcome};
+
+    let socket = PingSocket::open(address).map_err(|error| format!("socketFailed:{error}"))?;
+    let started = Instant::now();
+    let mut ticks = Vec::new();
+    let mut sequence: u16 = 0;
+
+    while app.state::<WatchState>().active.load(Ordering::SeqCst) {
+        sequence = sequence.wrapping_add(1);
+        let at_ms = started.elapsed().as_millis() as u64;
+
+        let rtt_ms = match socket.probe(address, sequence, std::time::Duration::from_millis(1500)) {
+            Ok(ProbeOutcome::Reply { rtt, .. }) => {
+                Some((rtt.as_secs_f64() * 100_000.0).round() / 100.0)
+            }
+            Ok(_) => None,
+            Err(error) => return Err(format!("probeFailed:{error}")),
+        };
+
+        ticks.push(quick_check::monitor::Tick { at_ms, rtt_ms });
+        let _ = app.emit("quick-check-watch", (at_ms, rtt_ms));
+
+        // Wake often so Stop feels immediate even on a long interval.
+        let deadline = Instant::now() + interval;
+        while Instant::now() < deadline {
+            if !app.state::<WatchState>().active.load(Ordering::SeqCst) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100).min(interval));
+        }
+    }
+
+    Ok(quick_check::monitor::summarize(&ticks))
+}
+
+#[tauri::command]
+async fn run_quick_check(
+    app: tauri::AppHandle,
+    target: String,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::runner::QuickCheckReport, String> {
+    // No authorization ceremony: the user typing an address and pressing the
+    // button *is* the intent, exactly as in Apple's own Network Utility. The
+    // guard only stops two runs overlapping on the same sockets.
+    let _guard = execution_state.try_start()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::runner::run(&target, |event| {
+            // A dropped event only costs a chart point; never fail the run for it.
+            let _ = app.emit("quick-check-probe", event);
+        })
+    })
+    .await
+    .map_err(|error| format!("Quick check worker failed: {error}"))?
+}
+
 #[tauri::command]
 async fn run_network_reliability_check(
     mode: Option<String>,
@@ -3153,6 +3521,7 @@ async fn export_latest_lab_zip() -> Result<ExportResult, String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(AuditExecutionState::default())
+        .manage(WatchState::default())
         .invoke_handler(tauri::generate_handler![
             check_engine,
             install_bundled_engine,
@@ -3161,6 +3530,25 @@ pub fn run() {
             run_audit_step,
             run_full_audit,
             run_network_reliability_check,
+            run_quick_check,
+            read_local_network,
+            is_sandboxed,
+            read_public_egress,
+            check_clock,
+            check_tcp_port,
+            run_traceroute,
+            inspect_device,
+            list_neighbours,
+            sweep_local_subnet,
+            read_scope,
+            authorize_current_subnet,
+            revoke_subnet,
+            describe_sweep_scope,
+            check_segment_size,
+            open_device_page,
+            diagnose_dns,
+            start_watch,
+            stop_watch,
             read_latest_report,
             read_remediation_tracking,
             save_remediation_tracking,
@@ -3172,7 +3560,8 @@ pub fn run() {
             export_latest_lab_zip,
             open_network_reliability_artifact,
             open_engine_folder,
-            open_export_folder
+            open_export_folder,
+            open_about_link
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -3218,6 +3607,63 @@ mod tests {
     fn unknown_step_ids_are_rejected_by_deserialization() {
         let result = serde_json::from_str::<AuditStep>("\"custom_command\"");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn install_over_a_stale_engine_removes_files_the_new_version_no_longer_ships() {
+        // Regression test for a real bug: install_bundled_engine used to copy
+        // new files over an existing installation without removing anything
+        // first. If an older installed engine has a file the new bundled
+        // engine renamed or dropped, that stray file survives the "update"
+        // and the immediately-following manifest check on the destination
+        // fails forever after -- the Install/Update button becomes
+        // permanently broken until someone manually deletes the directory.
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lanpilot-engine-upgrade-test-{unique}"));
+        let source = root.join("source");
+        let destination = root.join("destination");
+        fs::create_dir_all(&source).expect("source directory should be created");
+        fs::create_dir_all(&destination).expect("destination directory should be created");
+
+        // New bundled engine ships exactly one file.
+        let new_contents = b"echo new-step";
+        fs::write(source.join("01-step.sh"), new_contents).expect("new script should be written");
+        let mut hasher = Sha256::new();
+        hasher.update(new_contents);
+        let new_hash = format!("{:x}", hasher.finalize());
+        fs::write(
+            source.join("ENGINE_SHA256SUMS.txt"),
+            format!("{new_hash}  01-step.sh\n"),
+        )
+        .expect("source manifest should be written");
+
+        // Destination has an OLD installation with a file the new version no
+        // longer ships (simulating a renamed/removed script across versions).
+        fs::write(destination.join("00-legacy-step.sh"), b"echo old-step")
+            .expect("stale legacy script should be written");
+
+        // The old (buggy) behavior: copy without wiping first leaves the
+        // stray file behind and the destination fails its own manifest check.
+        copy_engine_directory(&source, &destination).expect("copy should succeed");
+        assert!(
+            verify_engine_manifest(&destination).is_err(),
+            "sanity check: a stray file must make the naive copy fail its own manifest check"
+        );
+
+        // The fix: wipe the destination before copying, exactly as
+        // install_bundled_engine now does.
+        fs::remove_dir_all(&destination).expect("stale destination should be removable");
+        copy_engine_directory(&source, &destination).expect("copy should succeed");
+        assert!(
+            verify_engine_manifest(&destination).is_ok(),
+            "a clean reinstall must pass its own manifest check"
+        );
+        assert!(!destination.join("00-legacy-step.sh").exists());
+
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]

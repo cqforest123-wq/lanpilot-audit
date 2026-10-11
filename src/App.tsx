@@ -2,16 +2,17 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useI18n } from "./i18n";
+import { QuickCheckPanel } from "./QuickCheckPanel";
 import type { Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
-import { buildRemediationPack, type RemediationPack, type RemediationStatus } from "./remediation-assistant";
 import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkReliabilityEvidence, type ReliabilityStatus } from "./network-reliability";
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
 import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
 import packageJson from "../package.json";
+import { LayoutDashboard, Radar, ShieldCheck, FileText, Wrench, FileDown, Settings as SettingsIcon, Satellite, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Cable, Globe, Waypoints, Mail, Scale, Code2, Bug, type LucideIcon } from "lucide-react";
 import "./App.css";
 
-type Page = "overview" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "networkCheck" | "report" | "compare" | "remediation" | "export" | "settings";
+type Page = "overview" | "quickCheck" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
 type StepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 type AuditStepId =
   | "init_lab"
@@ -137,12 +138,6 @@ interface AuditStep {
   result?: AuditStepResult;
 }
 
-interface AuthorizationDetails {
-  projectName: string;
-  site: string;
-  notes: string;
-}
-
 const STEP_DEFINITIONS: Omit<AuditStep, "status" | "result">[] = [
   { id: "init_lab", labelKey: "step.initLab", descriptionKey: "step.initLabDescription" },
   { id: "baseline", labelKey: "step.baseline", descriptionKey: "step.baselineDescription" },
@@ -168,9 +163,29 @@ const formatDuration = (durationMs: number | undefined, pending: string): string
 function App() {
   const { t } = useI18n();
   const [page, setPage] = useState<Page>("overview");
+  // The engine-backed pages read a lab directory the sandboxed build never
+  // creates, and Export would write into the container where the user cannot
+  // find it. Offering them there is worse than not offering them.
+  const [sandboxed, setSandboxed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const value = await invoke<boolean>("is_sandboxed");
+        // Strictly true only. Anything else — an older backend, an unexpected
+        // shape — must not hide features that work.
+        if (active) setSandboxed(value === true);
+      } catch {
+        // Unknown means show everything; hiding on a failed probe would remove
+        // working features from the Developer ID build.
+        if (active) setSandboxed(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
   const [auditRunning, setAuditRunning] = useState(false);
   const [authorized, setAuthorized] = useState(false);
-  const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [auditInterface, setAuditInterface] = useState("");
   const [latestReport, setLatestReport] = useState<LatestReport | null>(null);
   const [networkResult, setNetworkResult] = useState<NetworkReliabilityRun | null>(null);
@@ -178,7 +193,6 @@ function App() {
   const startAuthorization = () => {
     if (auditRunning) return;
     setAuthorized(false);
-    setDetails(null);
     setPage("authorization");
   };
 
@@ -190,17 +204,21 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
-          <span className="brand-mark">LP</span>
+          <span className="brand-mark"><Satellite size={18} strokeWidth={2.25} /></span>
           <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
         </button>
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
-          <NavButton active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
-          <NavButton active={page === "networkCheck"} disabled={auditRunning} onClick={() => navigate("networkCheck")} label={t("navNetworkCheck")} />
-          <NavButton active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
-          <NavButton active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
-          <NavButton active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
-          <NavButton active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
-          <NavButton active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
+          <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
+          <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
+          {sandboxed ? null : (
+            <>
+              <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
+              <NavButton icon={FileText} active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
+              <NavButton icon={Wrench} active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
+              <NavButton icon={FileDown} active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+            </>
+          )}
+          <NavButton icon={SettingsIcon} active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
         </nav>
         <div className="sidebar-footer">
           <LanguageSelector />
@@ -221,16 +239,15 @@ function App() {
         {page === "overview" && (
           <OverviewPage
             result={networkResult}
-            onNetworkCheck={() => navigate("networkCheck")}
+            onNetworkCheck={() => navigate("quickCheck")}
             onGovernanceAudit={startAuthorization}
           />
         )}
         {page === "authorization" && (
           <AuthorizationPage
             onCancel={() => navigate("overview")}
-            onConfirm={async (authorizationDetails) => {
-              await invoke("authorize_audit", { projectName: authorizationDetails.projectName });
-              setDetails(authorizationDetails);
+            onConfirm={async () => {
+              await invoke("authorize_audit");
               setAuthorized(true);
               setPage("engine");
             }}
@@ -239,8 +256,8 @@ function App() {
         {page === "engine" && authorized && (
           <EngineSetupPage onBack={startAuthorization} onContinue={() => setPage("interface")} />
         )}
-        {page === "interface" && authorized && details && (
-          <InterfacePage details={details} selected={auditInterface} onSelect={setAuditInterface} onBack={startAuthorization} onContinue={() => setPage("run")} />
+        {page === "interface" && authorized && (
+          <InterfacePage selected={auditInterface} onSelect={setAuditInterface} onBack={startAuthorization} onContinue={() => setPage("run")} />
         )}
         {page === "run" && authorized && (
           <RunPage
@@ -256,7 +273,12 @@ function App() {
         {page === "report" && <ReportPage initialReport={latestReport} />}
         {page === "assets" && <GovernanceDataPage titleKey="toolbox.assets" descriptionKey="toolbox.assetsDescription" fields={["assetInventorySummary", "assetInventory", "localNetworkConfig"]} />}
         {page === "exposure" && <GovernanceDataPage titleKey="toolbox.exposure" descriptionKey="toolbox.exposureDescription" fields={["serviceExposureSummary", "serviceExposureMatrix", "mdnsServices", "webBaseline", "tlsCertificates"]} />}
-        {page === "networkCheck" && <NetworkReliabilityPage onRunningChange={setAuditRunning} onComplete={setNetworkResult} />}
+        {page === "quickCheck" && (
+          <QuickCheckPanel
+            onRunningChange={setAuditRunning}
+            deepReport={<NetworkReliabilityPage onRunningChange={setAuditRunning} onComplete={setNetworkResult} />}
+          />
+        )}
         {page === "compare" && <GovernanceDataPage titleKey="toolbox.compare" descriptionKey="toolbox.compareDescription" fields={["snapshotDiff", "governanceSummary"]} />}
         {page === "remediation" && <RemediationPage onRetest={startAuthorization} />}
         {page === "export" && <ExportPage />}
@@ -267,8 +289,13 @@ function App() {
   );
 }
 
-function NavButton({ active, disabled, onClick, label }: { active: boolean; disabled: boolean; onClick: () => void; label: string }) {
-  return <button className={active ? "active" : ""} type="button" disabled={disabled} onClick={onClick}>{label}</button>;
+function NavButton({ icon: Icon, active, disabled, onClick, label }: { icon?: LucideIcon; active: boolean; disabled: boolean; onClick: () => void; label: string }) {
+  return (
+    <button className={active ? "active" : ""} type="button" disabled={disabled} onClick={onClick}>
+      {Icon && <span className="nav-icon-chip"><Icon size={15} strokeWidth={2.2} /></span>}
+      <span>{label}</span>
+    </button>
+  );
 }
 
 function OverviewPage({
@@ -314,20 +341,20 @@ function OverviewPage({
         </section>
       </div>
       <div className="overview-cards">
-        <MetricCard title={t("overview.physicalStatus")} status={summary.physicalLanStatus} rows={[
+        <MetricCard icon={Cable} title={t("overview.physicalStatus")} status={summary.physicalLanStatus} rows={[
           [t("reliability.interface"), physical.activeInterface || t("status.unknown")],
           [t("overview.localIp"), physical.ipv4 ?? t("status.unknown")],
           [t("reliability.gateway"), physical.gatewayIp ?? t("status.unknown")],
           [t("reliability.gatewayLatency"), formatNullableMs(physical.gatewayPingAvgMs, t("status.unknown"))],
           [t("reliability.gatewayLoss"), formatNullablePercent(physical.gatewayPingLossPct, t("status.unknown"))],
         ]} />
-        <MetricCard title={t("overview.dnsStatus")} status={summary.dnsStatus} rows={[
+        <MetricCard icon={Globe} title={t("overview.dnsStatus")} status={summary.dnsStatus} rows={[
           [t("overview.dhcpDns"), (physical.dhcpDns ?? []).join(", ") || t("status.unknown")],
           [t("reliability.systemDns"), evidence.localControlPlane.systemDnsServers.join(", ") || t("status.unknown")],
           [t("overview.gatewayDns"), formatNullableMs(physical.gatewayDnsMs, t("status.unknown"))],
           [t("overview.dnsJudgement"), overlay.dnsViaOverlay ? t("overview.dnsTakenByOverlay") : t("overview.dnsDirect")],
         ]} />
-        <MetricCard title={t("overview.overlayStatus")} status={summary.overlayStatus} rows={[
+        <MetricCard icon={Waypoints} title={t("overview.overlayStatus")} status={summary.overlayStatus} rows={[
           ["Stash", overlay.stashDetected ? t("status.active") : t("status.stopped")],
           ["Tailscale", overlay.tailscaleRunning ? t("status.active") : t("status.stopped")],
           [t("reliability.defaultRoute"), overlay.defaultRouteInterface ?? t("status.unknown")],
@@ -340,16 +367,32 @@ function OverviewPage({
   );
 }
 
+const STATUS_ICONS: Partial<Record<ReliabilityStatus, LucideIcon>> = {
+  healthy: CheckCircle2,
+  warning: AlertTriangle,
+  critical: XCircle,
+  unknown: HelpCircle,
+};
+
 function StatusBadge({ status, label }: { status: ReliabilityStatus; label: string }) {
-  return <span className={`status-badge ${status}`}>{label}</span>;
+  const Icon = STATUS_ICONS[status];
+  return (
+    <span className={`status-badge ${status}`}>
+      {Icon && <Icon size={12} strokeWidth={2.5} />}
+      {label}
+    </span>
+  );
 }
 
-function MetricCard({ title, status, rows }: { title: string; status: ReliabilityStatus; rows: [string, string][] }) {
+function MetricCard({ icon: Icon, title, status, rows }: { icon?: LucideIcon; title: string; status: ReliabilityStatus; rows: [string, string][] }) {
   const { t } = useI18n();
   return (
     <section className="card compact metric-card">
       <div className="panel-heading">
-        <h2>{title}</h2>
+        <div className="panel-title">
+          {Icon && <span className={`icon-chip icon-chip-${status}`}><Icon size={16} strokeWidth={2.2} /></span>}
+          <h2>{title}</h2>
+        </div>
         <StatusBadge status={status} label={t(`reliability.status.${status}`)} />
       </div>
       <dl className="metric-list">
@@ -531,30 +574,29 @@ function AuthorizationPage({
   onConfirm,
 }: {
   onCancel: () => void;
-  onConfirm: (details: AuthorizationDetails) => Promise<void>;
+  onConfirm: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [error, setError] = useState("");
-  const [projectName, setProjectName] = useState("");
-  const [site, setSite] = useState("");
-  const [notes, setNotes] = useState("");
-  const [checks, setChecks] = useState([false, false, false, false, false]);
-  const allChecked = checks.every(Boolean);
-  const engineReady = Boolean(engine && (engine.scriptsReady || !engine.engineFound));
+  const [confirmed, setConfirmed] = useState(false);
+  // Deliberately NOT gated on engine.scriptsReady: the only way to fix an
+  // outdated/incomplete engine is the Install/Update button on the NEXT page
+  // (EngineSetupPage), which already has its own correct gate before letting
+  // the user proceed further. Requiring scripts to already be ready HERE was
+  // a deadlock -- once any (even stale) engine directory exists, the user can
+  // never reach the page that updates it. Just require the check to have
+  // completed so we're not submitting against unknown state.
+  const engineChecked = Boolean(engine);
 
   useEffect(() => {
     invoke<EngineStatus>("check_engine").then(setEngine).catch((value) => setError(errorMessage(value)));
   }, []);
 
-  const toggleCheck = (index: number, checked: boolean) => {
-    setChecks((current) => current.map((value, itemIndex) => itemIndex === index ? checked : value));
-  };
-
   const submit = async () => {
     setError("");
     try {
-      await onConfirm({ projectName: projectName.trim(), site: site.trim(), notes: notes.trim() });
+      await onConfirm();
     } catch (value) {
       setError(errorMessage(value));
     }
@@ -563,11 +605,6 @@ function AuthorizationPage({
   return (
     <section className="content-stack">
       <PageHeading eyebrow={t("authorization.requiredBeforeEveryRealAudit")} title={t("authorization.title")} description={t("authorization.description")} />
-      <div className="form-grid">
-        <label>{t("authorization.projectName")} <strong>*</strong><input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
-        <label>{t("authorization.siteOrganization")}<input value={site} onChange={(event) => setSite(event.target.value)} /></label>
-        <label className="full-width">{t("authorization.notes")}<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-      </div>
       <div className="card compact">
         <h2>{t("authorization.localEngineReadiness")}</h2>
         {!engine && !error && <p className="muted">{t("authorization.checkingEngine")}</p>}
@@ -579,25 +616,17 @@ function AuthorizationPage({
             <Readiness label={t("authorization.latestLabReady")} ready={engine.latestLabExists} optional />
           </div>
         )}
-        {engine?.warnings.map((warning) => <RawDetail detail={warning} warning key={warning} />)}
+        {engine?.warnings.map((warning) => <EngineWarning warning={warning} key={warning} />)}
       </div>
       <div className="confirmation-list">
-        {[
-          t("authorization.confirmAssessNetwork"),
-          t("authorization.confirmOnlyApprovedScripts"),
-          t("authorization.confirmNoOffensiveActions"),
-          t("authorization.confirmPointInTimeNoConfigChange"),
-          t("authorization.confirmCurrentInterface"),
-        ].map((label, index) => (
-          <label className="confirmation card compact" key={label}>
-            <input type="checkbox" checked={checks[index]} onChange={(event) => toggleCheck(index, event.target.checked)} />
-            <span><strong>{label}</strong></span>
-          </label>
-        ))}
+        <label className="confirmation card compact">
+          <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+          <span><strong>{t("authorization.confirmAssessNetwork")}</strong></span>
+        </label>
       </div>
       {error && <RawDetail detail={error} />}
       <div className="actions">
-        <button className="primary" type="button" disabled={!allChecked || !projectName.trim() || !engineReady} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
+        <button className="primary" type="button" disabled={!confirmed || !engineChecked} onClick={submit}>{t("authorization.confirmAuthorization")}</button>
         <button className="secondary" type="button" onClick={onCancel}>{t("authorization.cancel")}</button>
       </div>
     </section>
@@ -638,7 +667,7 @@ function EngineSetupPage({ onBack, onContinue }: { onBack: () => void; onContinu
         <p className="path">{engine?.enginePath ?? t("common.checking")}</p>
         <p className="muted">{t("engine.installedVersion")}: {engine?.engineVersion ?? t("status.notInstalled")} · {t("engine.bundledVersion")}: {engine?.bundledEngineVersion ?? t("status.unknown")}</p>
         {!engine?.nmapAvailable && <p className="message">{t("nmapUnavailable")}</p>}
-        {engine?.warnings.map((warning) => <RawDetail detail={warning} warning key={warning} />)}
+        {engine?.warnings.map((warning) => <EngineWarning warning={warning} key={warning} />)}
       </div>
       {error && <RawDetail detail={error} />}
       <div className="actions">
@@ -655,7 +684,7 @@ function Readiness({ label, ready, optional = false }: { label: string; ready: b
   return <div className={`readiness ${ready ? "success-text" : optional ? "muted" : "error-text"}`}><span className="status-dot" />{label}: {ready ? t("status.ready") : optional ? t("status.unavailable") : t("common.required")}</div>;
 }
 
-function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { details: AuthorizationDetails; selected: string; onSelect: (value: string) => void; onBack: () => void; onContinue: () => void }) {
+function InterfacePage({ selected, onSelect, onBack, onContinue }: { selected: string; onSelect: (value: string) => void; onBack: () => void; onContinue: () => void }) {
   const { t } = useI18n();
   const [interfaces, setInterfaces] = useState<AuditInterface[]>([]);
   const [error, setError] = useState("");
@@ -674,8 +703,6 @@ function InterfacePage({ details, selected, onSelect, onBack, onContinue }: { de
     <section className="content-stack">
       <PageHeading eyebrow={t("interface.eyebrow")} title={t("interface.title")} description={t("interface.description")} />
       <div className="card compact review-grid">
-        <div><span>{t("interface.project")}</span><strong>{details.projectName}</strong></div>
-        <div><span>{t("interface.siteOrganization")}</span><strong>{details.site || t("common.notProvided")}</strong></div>
         <div><span>{t("interface.executionMode")}</span><strong>{t("run.stopOnFailure")}</strong></div>
         <div><span>{t("interface.selectionRule")}</span><strong>{t("interface.preferPhysical")}</strong></div>
       </div>
@@ -896,6 +923,7 @@ function ReportPage({ initialReport }: { initialReport: LatestReport | null }) {
         <>
           {report.missingFiles.length > 0 && <p className="message error">{t("missingFiles")}: {report.missingFiles.join(", ")}</p>}
           <SummaryCards summary={normalizedSummary(report)} />
+          <SeverityChart summary={normalizedSummary(report)} />
           <div className="report-tabs" role="tablist">
             <button className={view === "localized" ? "active" : ""} type="button" role="tab" aria-selected={view === "localized"} onClick={() => setView("localized")}>{copy.localizedView}</button>
             <button className={view === "raw" ? "active" : ""} type="button" role="tab" aria-selected={view === "raw"} onClick={() => setView("raw")}>{copy.rawView}</button>
@@ -916,6 +944,38 @@ function SummaryCards({ summary }: { summary: ReportSummary }) {
     [t("openServiceHosts"), summary.openServiceHosts, ""], [t("gatewayPosture"), localizeGatewayStatus(summary.gatewayPostureStatus, locale), ""],
   ];
   return <div className="summary-grid">{cards.map(([label, value, tone]) => <div className={`summary-card card ${tone}`} key={label}><span>{label}</span><strong>{value ?? copy.unknown}</strong></div>)}</div>;
+}
+
+// A plain bar chart for the one part of the report that is genuinely
+// count-shaped (finding severity). Hand-rolled div/CSS bars rather than a
+// charting library, matching how LatencyVisualization and Quick Check's
+// ping chart already do it elsewhere in this codebase -- no new dependency
+// for three bars.
+function SeverityChart({ summary }: { summary: ReportSummary }) {
+  const { t } = useI18n();
+  const rows: [string, number, string][] = [
+    [t("high"), summary.highCount ?? 0, "high"],
+    [t("medium"), summary.mediumCount ?? 0, "medium"],
+    [t("low"), summary.lowCount ?? 0, "low"],
+  ];
+  if (rows.every(([, value]) => value === 0)) return null;
+  const max = Math.max(1, ...rows.map(([, value]) => value));
+  return (
+    <section className="card compact severity-chart">
+      <h2>{t("report.severityChart")}</h2>
+      <div className="severity-chart-rows">
+        {rows.map(([label, value, tone]) => (
+          <div className="severity-chart-row" key={label}>
+            <span className="severity-chart-label">{label}</span>
+            <div className="severity-chart-track">
+              <div className={`severity-chart-fill ${tone}`} style={{ width: `${(value / max) * 100}%` }} />
+            </div>
+            <span className="severity-chart-value">{value}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function normalizedSummary(report: LatestReport): ReportSummary {
@@ -1009,58 +1069,38 @@ function GovernanceDataPage({ titleKey, descriptionKey, fields }: { titleKey: st
   </section>;
 }
 
+// Simplified on purpose (2026-09): this used to be a full ticket tracker
+// (owner/due date/status/priority/business justification/notes, plus a
+// separate save/export flow) -- the user found that too much for what
+// should just be a quick tip per finding. The formal remediation-tracking
+// audit trail (05-remediation/remediation-tracking.csv) is written by the
+// audit engine itself regardless of this page, so trimming this display
+// down to read-only doesn't remove that record.
 function RemediationPage({ onRetest }: { onRetest: () => void }) {
   const { t, locale } = useI18n();
-  const [report, setReport] = useState<LatestReport | null>(null);
-  const [pack, setPack] = useState<RemediationPack | null>(null);
-  const [message, setMessage] = useState("");
+  const [findings, setFindings] = useState<LocalizedFinding[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    Promise.all([invoke<LatestReport>("read_latest_report"), invoke<RemediationPack | null>("read_remediation_pack")])
-      .then(([latest, existing]) => { setReport(latest); setPack(existing); })
+    invoke<LatestReport>("read_latest_report")
+      .then((report) => setFindings(deduplicateFindings(report.findings).map((finding) => localizeFinding(finding, locale))))
       .catch((value) => setError(errorMessage(value)));
-  }, []);
-  const update = (index: number, patch: Partial<RemediationPack["tickets"][number]>) =>
-    setPack((current) => current ? {...current, tickets:current.tickets.map((ticket, item) => item === index ? {...ticket, ...patch} : ticket)} : current);
-  const save = async (next = pack) => {
-    if (!next) return;
-    setError(""); setMessage("");
-    try { await invoke("save_remediation_pack", { pack: next }); setPack(next); setMessage(t("remediation.saved")); }
-    catch (value) { setError(errorMessage(value)); }
-  };
-  const generate = async () => {
-    if (!report) return;
-    const next = buildRemediationPack(report.findings, locale, report.labDirectory);
-    await save(next);
-  };
-  const statuses: RemediationStatus[] = ["open","assigned","in_progress","remediated","accepted_risk","retest_required","verified"];
+  }, [locale]);
   return <section className="content-stack">
     <PageHeading eyebrow={t("toolbox.eyebrow")} title={t("remediation.title")} description={t("remediation.description")} />
     <p className="limitation">{t("remediation.safety")}</p>
+    {findings?.map((finding, index) => <article className="card compact remediation-tip" key={index}>
+      <div className="panel-heading">
+        <span className={`severity ${finding.severity.toLowerCase()}`}>{t(finding.severity.toLowerCase())}</span>
+        <strong>{localizeAssetLabel(finding.asset, locale)}</strong>
+      </div>
+      <p>{finding.localizedFinding}</p>
+      <p className="remediation-hint">💡 {finding.localizedRecommendedAction}</p>
+    </article>)}
+    {findings?.length === 0 && <p className="message">{t("remediation.noPack")}</p>}
+    {error && <RawDetail detail={error} />}
     <div className="actions">
-      <button className="primary" type="button" disabled={!report} onClick={generate}>{t("remediation.generate")}</button>
-      <button className="secondary" type="button" disabled={!pack} onClick={() => save()}>{t("toolbox.saveRemediation")}</button>
-      <button className="secondary" type="button" disabled={!pack} onClick={() => invoke("export_latest_lab_zip").then(() => setMessage(t("remediation.saved"))).catch((value) => setError(errorMessage(value)))}>{t("remediation.export")}</button>
       <button className="secondary" type="button" onClick={onRetest}>{t("remediation.retest")}</button>
     </div>
-    {pack?.tickets.map((ticket, index) => <article className="card compact remediation-editor" key={ticket.id}>
-      <h2>{ticket.id} · {ticket.asset}</h2>
-      <p>{ticket.localizedFinding}</p>
-      <p><strong>{ticket.localizedRecommendedAction}</strong></p>
-      <div className="form-grid">
-        <label>{t("toolbox.owner")}<input value={ticket.owner} onChange={(event) => update(index, { owner: event.target.value })} /></label>
-        <label>{t("toolbox.dueDate")}<input type="date" value={ticket.dueDate} onChange={(event) => update(index, { dueDate: event.target.value })} /></label>
-        <label>{t("toolbox.status")}<select value={ticket.status} onChange={(event) => update(index, { status:event.target.value as RemediationStatus })}>{statuses.map((status) => <option key={status} value={status}>{t(`remediation.status.${status}`)}</option>)}</select></label>
-        <label>{t("toolbox.priority")}<select value={ticket.priority} onChange={(event) => update(index, { priority:event.target.value })}><option value="High">{t("high")}</option><option value="Medium">{t("medium")}</option><option value="Low">{t("low")}</option><option value="Routine">{t("toolbox.priorityRoutine")}</option></select></label>
-        <label className="full-width">{t("toolbox.businessJustification")}<textarea value={ticket.businessJustification} onChange={(event) => update(index, { businessJustification:event.target.value })} /></label>
-        <label className="full-width">{t("toolbox.notes")}<textarea value={ticket.notes} onChange={(event) => update(index, { notes:event.target.value })} /></label>
-      </div>
-      <details><summary>{t("remediation.manualSteps")}</summary><ol>{ticket.manualSteps.map((step) => <li key={step}>{step}</li>)}</ol></details>
-      <details><summary>{t("remediation.validationSteps")}</summary><ol>{ticket.validationSteps.map((step) => <li key={step}>{step}</li>)}</ol></details>
-      <details><summary>{t("remediation.rollback")}</summary><ol>{ticket.rollbackConsiderations.map((step) => <li key={step}>{step}</li>)}</ol></details>
-    </article>)}
-    {!pack && !error && <p className="message">{t("remediation.noPack")}</p>}
-    {message && <p className="message success-message">{message}</p>}{error && <RawDetail detail={error} />}
   </section>;
 }
 
@@ -1098,7 +1138,7 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
     setMessage("");
     setResult(null);
     try {
-      await invoke("authorize_audit", { projectName: mode === "quick" ? "Network Doctor Quick Check" : "Network Doctor Deep Diagnosis" });
+      await invoke("authorize_audit");
       const next = await invoke<NetworkReliabilityRun>("run_network_reliability_check", { mode });
       const completed = { ...next, doctorMode: mode };
       setResult(completed);
@@ -1160,7 +1200,7 @@ function NetworkReliabilityPage({ onRunningChange, onComplete }: { onRunningChan
           <span><strong>{t("reliability.lightConfirmCheck")}</strong></span>
         </label>
         <div className="actions">
-          <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : mode === "quick" ? t("button.startNetworkCheck") : t("reliability.deepDiagnosis")}</button>
+          <button className="primary" type="button" disabled={!canRun} onClick={runCheck}>{running ? t("reliability.running") : mode === "quick" ? t("reliability.run") : t("reliability.deepDiagnosis")}</button>
         </div>
       </section>
       <NetworkInterfaceSelector interfaces={interfaces} selected={selectedInterface} onSelect={setSelectedInterface} mode="reliability" />
@@ -1927,6 +1967,29 @@ function SettingsPage() {
   return (
     <section className="content-stack">
       <PageHeading eyebrow={t("settings.eyebrow")} title={t("settings.title")} description={t("settings.description")} />
+      <div className="card compact about-card">
+        <div className="about-header">
+          <span className="about-mark"><Satellite size={22} strokeWidth={2.1} /></span>
+          <div>
+            <h2>LANPilot Audit</h2>
+            <p className="muted">v{packageJson.version}</p>
+          </div>
+        </div>
+        <div className="about-links">
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "email" })}>
+            <Mail size={15} strokeWidth={2.1} /><span>{t("settings.contact")}</span><em>cqforest123@gmail.com</em>
+          </button>
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "license" })}>
+            <Scale size={15} strokeWidth={2.1} /><span>{t("settings.license")}</span><em>Apache-2.0</em>
+          </button>
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "source" })}>
+            <Code2 size={15} strokeWidth={2.1} /><span>{t("settings.sourceCode")}</span><em>GitHub</em>
+          </button>
+          <button className="about-link" type="button" onClick={() => invoke("open_about_link", { linkId: "issues" })}>
+            <Bug size={15} strokeWidth={2.1} /><span>{t("settings.reportIssue")}</span><em>{t("settings.githubIssues")}</em>
+          </button>
+        </div>
+      </div>
       <div className="card compact review-grid">
         <div><span>{t("settings.version")}</span><strong>{packageJson.version}</strong></div>
         <div><span>{t("settings.engineVersion")}</span><strong>{status?.engineVersion ?? status?.bundledEngineVersion ?? "—"}</strong></div>
@@ -1976,9 +2039,39 @@ function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: 
   return <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p className="lead">{description}</p></div>;
 }
 
-function RawDetail({ detail, warning = false }: { detail: string; warning?: boolean }) {
+// The engine backend returns a small, fixed set of English sentences for
+// known conditions (see check_engine() in src-tauri/src/lib.rs). Map each one
+// to a real translation key so the visible headline is localized, while the
+// exact backend string stays available in the raw detail below it -- that
+// exact string is still useful (e.g. to search this file when reporting a
+// bug), just not the only thing shown to a non-English-reading user. Genuine
+// subprocess stdout/stderr elsewhere in the app is NOT in this map on
+// purpose: that really is raw external output and has no fixed English text
+// to translate.
+const ENGINE_WARNING_KEYS: Record<string, string> = {
+  "Local audit engine directory was not found.": "engineWarning.engineNotFound",
+  "One or more approved audit scripts are missing or not executable.": "engineWarning.scriptsNotReady",
+  "nmap is not available on the fixed audit PATH.": "engineWarning.nmapUnavailable",
+  "No latest audit lab is available yet.": "engineWarning.noLatestLab",
+  "Using the development engine fallback.": "engineWarning.developmentFallback",
+  "A bundled engine update is available.": "engineWarning.updateAvailable",
+  "The installed engine failed its integrity check.": "engineWarning.integrityCheckFailed",
+};
+
+function EngineWarning({ warning }: { warning: string }) {
   const { t } = useI18n();
-  return <details className={`message ${warning ? "" : "error"}`}><summary>{t(warning ? "status.warning" : "common.error")}</summary><pre>{t("common.rawDetail")}: {"\n"}{detail}</pre></details>;
+  const key = ENGINE_WARNING_KEYS[warning];
+  return <RawDetail detail={warning} warning label={key ? t(key) : undefined} />;
+}
+
+function RawDetail({ detail, warning = false, label }: { detail: string; warning?: boolean; label?: string }) {
+  const { t } = useI18n();
+  return (
+    <details className={`message ${warning ? "" : "error"}`}>
+      <summary>{label ?? t(warning ? "status.warning" : "common.error")}</summary>
+      <pre>{t("common.rawDetail")}: {"\n"}{detail}</pre>
+    </details>
+  );
 }
 
 function Guardrail() {

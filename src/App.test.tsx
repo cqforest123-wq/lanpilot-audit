@@ -89,7 +89,6 @@ describe("audit authorization and failure flow", () => {
     const continueButton = screen.getByRole("button", { name: "Confirm Authorization" });
     expect(continueButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText(/Project name/), "Test audit");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     expect(continueButton).toBeEnabled();
     await user.click(continueButton);
@@ -105,6 +104,35 @@ describe("audit authorization and failure flow", () => {
     await user.click(screen.getByRole("button", { name: "Authorize New Run" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm Authorization" })).toBeDisabled());
     expect(screen.getAllByRole("checkbox").every((checkbox) => !(checkbox as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it("does not deadlock authorization behind an outdated-but-present engine", async () => {
+    // Regression test: a stale/incomplete engine directory (e.g. an old
+    // install left over from a previous app version) makes engineFound true
+    // but scriptsReady false. The ONLY way to fix that is the Install/Update
+    // button on the next page (EngineSetupPage), so Confirm Authorization
+    // must not require scriptsReady -- requiring it here was a real deadlock
+    // that shipped across several versions (engine present-but-outdated ->
+    // can never reach the page that updates it).
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "check_engine") {
+        return Promise.resolve({ ...engineStatus, scriptsReady: false, warnings: ["One or more approved audit scripts are missing or not executable."] });
+      }
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await startGovernanceAudit(user);
+    await screen.findByText("Engine: Ready");
+
+    const confirmButton = screen.getByRole("button", { name: "Confirm Authorization" });
+    expect(confirmButton).toBeDisabled();
+
+    for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
+
+    expect(confirmButton).toBeEnabled();
   });
 
   it("runs all fixed steps in order before enabling the report", async () => {
@@ -163,7 +191,6 @@ describe("audit authorization and failure flow", () => {
 
     await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
-    await user.type(screen.getByLabelText(/Project name/), "Test audit");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     await user.click(screen.getByRole("button", { name: "Confirm Authorization" }));
     await user.click(screen.getByRole("button", { name: "Continue to Interface" }));
@@ -195,24 +222,34 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock).toHaveBeenCalledWith("export_latest_lab_zip");
   });
 
-  it("generates a fixed local remediation pack and requires authorization before retest", async () => {
+  it("shows a plain-language tip per deduplicated finding, with no ticket-editing UI, and requires authorization before retest", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "read_latest_report") return Promise.resolve(localizedReportFixture);
-      if (command === "read_remediation_pack") return Promise.resolve(null);
-      if (command === "save_remediation_pack") return Promise.resolve();
       return Promise.resolve();
     });
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Remediation" }));
-    await user.click(await screen.findByRole("button", { name: "Generate Remediation Pack" }));
-    expect(invokeMock).toHaveBeenCalledWith("save_remediation_pack", { pack: expect.objectContaining({ tickets: expect.any(Array) }) });
+
+    // The fixture has a duplicate SMB finding -- it must collapse to one tip.
+    await screen.findByText("192.168.50.248");
+    expect(screen.getAllByText("192.168.50.248")).toHaveLength(1);
+    expect(screen.getByText("192.168.50.88")).toBeVisible();
+    expect(screen.getByText("192.168.50.90")).toBeVisible();
+    expect(screen.getAllByText(/💡/)).toHaveLength(3);
+
+    // Simplified on purpose: no generate/save button, no ticket fields, no
+    // remediation-pack round trip at all.
+    expect(screen.queryByRole("button", { name: "Generate Remediation Pack" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Owner")).not.toBeInTheDocument();
+    expect(invokeMock.mock.calls.some(([command]) => command === "save_remediation_pack")).toBe(false);
+
     await user.click(screen.getByRole("button", { name: "Enter Authorized Retest" }));
     expect(screen.getByRole("button", { name: "Confirm Authorization" })).toBeDisabled();
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
 
-  it("runs the fixed Network Doctor Quick Check only after local authorization", async () => {
+  it("runs the fixed Path Report check only after local authorization", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "authorize_audit") return Promise.resolve();
       if (command === "list_audit_interfaces") return Promise.resolve([{ name: "en0", ipv4: "192.0.2.20" }, { name: "utun15", ipv4: "198.18.0.1" }]);
@@ -223,9 +260,10 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("button", { name: "Quick Check" }));
+    await user.click(screen.getByRole("tab", { name: "Full path" }));
     await user.click(screen.getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Run Quick Check" }));
+    await user.click(screen.getByRole("button", { name: "Run Network Check" }));
 
     expect(await screen.findByText("Network path view")).toBeVisible();
     expect(screen.getAllByText("Gateway").length).toBeGreaterThan(0);
@@ -233,7 +271,7 @@ describe("audit authorization and failure flow", () => {
     expect(invokeMock.mock.calls.some(([command]) => command === "run_full_audit" || command === "run_audit_step")).toBe(false);
   });
 
-  it("keeps Network Doctor demo data behind an explicit demo action", async () => {
+  it("keeps Path Report demo data behind an explicit demo action", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "list_audit_interfaces") return Promise.resolve([{ name: "en6", ipv4: "172.20.10.7" }]);
       return Promise.resolve(engineStatus);
@@ -241,9 +279,10 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("button", { name: "Quick Check" }));
+    await user.click(screen.getByRole("tab", { name: "Full path" }));
 
-    expect(await screen.findByText("No real Network Doctor run yet")).toBeVisible();
+    expect(await screen.findByText("No real Path Report run yet")).toBeVisible();
     expect(screen.queryByText("Demo Proxy Exit")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "View demo result" }));
     expect(await screen.findByText(/Demo mode: synthetic example data is shown/)).toBeVisible();
@@ -260,7 +299,8 @@ describe("audit authorization and failure flow", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Network Doctor" }));
+    await user.click(screen.getByRole("button", { name: "Quick Check" }));
+    await user.click(screen.getByRole("tab", { name: "Full path" }));
 
     expect(await screen.findByText("Current auto selection: en6")).toBeVisible();
     expect(screen.getByText("Self-assigned address")).toBeVisible();
@@ -291,10 +331,8 @@ describe("localization", () => {
     render(<I18nProvider><App /></I18nProvider>);
     await startGovernanceAudit(user);
     await screen.findByText("Engine: Ready");
-    await user.type(screen.getByLabelText(/Project name/), "Persistent project");
     await user.click(screen.getAllByRole("checkbox")[0]);
     await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "zh-CN");
-    expect(screen.getByDisplayValue("Persistent project")).toBeVisible();
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   });
 
@@ -383,6 +421,30 @@ const networkReliabilityFixture = {
   outputDirectory: "/Users/test/lanpilot-audit-latest/08-network-reliability",
 };
 
+describe("report severity chart", () => {
+  it("shows a bar per severity level sized to its count, and nothing when there are no findings", async () => {
+    invokeMock.mockResolvedValue(localizedReportFixture);
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Reports" }));
+
+    await screen.findByText("Findings by severity");
+    const rows = document.querySelectorAll(".severity-chart-row");
+    expect(rows).toHaveLength(3);
+    const highFill = document.querySelector(".severity-chart-fill.high") as HTMLElement;
+    // The fixture's High count is the largest of the three, so its bar must
+    // be the full-width (100%) reference bar the others are scaled against.
+    expect(highFill.style.width).toBe("100%");
+
+    cleanup();
+    invokeMock.mockResolvedValue({ ...localizedReportFixture, findings: [], summary: { ...localizedReportFixture.summary, highCount: 0, mediumCount: 0, lowCount: 0 } });
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Reports" }));
+    await waitFor(() => expect(document.querySelector(".summary-grid")).toBeInTheDocument());
+    expect(screen.queryByText("Findings by severity")).not.toBeInTheDocument();
+  });
+});
+
 describe("localized report view", () => {
   it("renders a fully localized Chinese main view, deduplicates findings, and preserves raw evidence", async () => {
     localStorage.setItem("lanpilot.locale", "zh-CN");
@@ -438,9 +500,7 @@ describe("full guided workflow localization", () => {
       expect(authorizationText).not.toContain(forbidden);
     }
     expect(authorizationText).toContain("nmap");
-    expect(authorizationText).toContain("当前选定的网络接口");
 
-    await user.type(screen.getByLabelText(/项目名称/), "本地化测试");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     await user.click(screen.getByRole("button", { name: "确认授权" }));
     await screen.findByText("本地优先引擎");
@@ -461,9 +521,59 @@ describe("full guided workflow localization", () => {
     render(<I18nProvider><App /></I18nProvider>);
     await user.click(screen.getAllByRole("button", { name: locale === "ja" ? "ガバナンス監査を実行" : "거버넌스 감사 실행" })[0]);
     expect(await screen.findByText(authorizationHeading)).toBeVisible();
-    await user.type(screen.getByLabelText(locale === "ja" ? /プロジェクト名/ : /프로젝트 이름/), "test");
     for (const checkbox of screen.getAllByRole("checkbox")) await user.click(checkbox);
     await user.click(screen.getByRole("button", { name: locale === "ja" ? "承認を確認" : "승인 확인" }));
     expect(await screen.findByText(engineHeading)).toBeVisible();
+  });
+});
+
+describe("sandboxed build navigation", () => {
+  const withSandbox = (value: unknown) => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "is_sandboxed") return Promise.resolve(value);
+      if (command === "list_audit_interfaces") return Promise.resolve([]);
+      return Promise.resolve(engineStatus);
+    });
+  };
+
+  it("hides the engine-backed pages under App Sandbox", async () => {
+    // Those pages read a lab directory the sandboxed build never creates, and
+    // Export would write into the container where the user cannot find it.
+    withSandbox(true);
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Governance Audit" })).not.toBeInTheDocument(),
+    );
+    for (const name of ["Reports", "Remediation", "Export"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    // Quick Check does not need the engine, so it stays.
+    expect(screen.getByRole("button", { name: "Quick Check" })).toBeVisible();
+  });
+
+  it("keeps them in the unsandboxed build", async () => {
+    withSandbox(false);
+    render(<App />);
+
+    for (const name of ["Governance Audit", "Reports", "Remediation", "Export"]) {
+      expect(await screen.findByRole("button", { name })).toBeVisible();
+    }
+  });
+
+  it("shows them when the probe fails or answers oddly", async () => {
+    // Failing closed would strip working features off the Developer ID build.
+    withSandbox({ unexpected: "shape" });
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Export" })).toBeVisible();
+
+    cleanup();
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "is_sandboxed") return Promise.reject(new Error("no bridge"));
+      if (command === "list_audit_interfaces") return Promise.resolve([]);
+      return Promise.resolve(engineStatus);
+    });
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Export" })).toBeVisible();
   });
 });
