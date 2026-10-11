@@ -145,6 +145,11 @@ user data.
 ## Checklists
 
 - Entitlements: sandbox, network client/server justification, file access.
-- Privacy: local storage, no cloud upload, user-controlled export.
+- Privacy: local storage, no cloud upload, user-controlled export, localized
+  `NSLocalNetworkUsageDescription` purpose strings.
 - Screenshots: authorization, engine setup, run status, report, export.
 - Metadata: restrained governance language, supported languages, limitations.
+- Signing: create and use Mac App Store distribution signing assets before
+  uploading through App Store Connect or Transporter. Developer ID notarization
+  remains the direct-download path and is not a substitute for App Store
+  submission signing.

@@ -42,6 +42,12 @@ both ways — with `network.client` alone the ICMP socket still opens and only t
 send fails. The app opens no listening socket, binds no service port, and accepts
 no incoming connection.
 
+The app also declares `NSLocalNetworkUsageDescription` and localized
+`InfoPlist.strings` files for every supported UI language. The purpose string
+explains that local network access is used only to check reachable devices,
+gateway, DNS, and connection health on networks the user owns or is authorized
+to review.
+
 ## What it sends
 
 Only probes, never user data:

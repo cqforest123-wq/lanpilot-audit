@@ -1,7 +1,7 @@
 {
   "name": "lanpilot-audit-app",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.8.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,10 +21,11 @@
     "release:remote-check": "node scripts/check-remote-release.mjs",
     "script:check": "for script in scripts/*.mjs; do node --check \"$script\" || exit 1; done",
     "workflow:check": "node scripts/check-workflow-security.mjs",
+    "appstore:check": "node scripts/check-appstore-readiness.mjs",
     "version:check": "node scripts/check-version-consistency.mjs",
     "engine:sync": "node scripts/sync-engine.mjs",
     "engine:sync:check": "node scripts/sync-engine.mjs --check",
-    "check:core": "npm run version:check && npm run engine:sync:check && npm run workflow:check && npm run typecheck && npm run script:check && npm run ui-localization:check && npm run i18n:strict-check && npm run i18n:visible-check && cargo check --locked --manifest-path src-tauri/Cargo.toml && npm run security:check && npm run security:deep-check && npm run qa:governance-fixtures && npm audit --omit=dev --audit-level=high && npm run test:i18n && npm run test:network-doctor && npm test && cargo test --locked --manifest-path src-tauri/Cargo.toml && cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "check:core": "npm run version:check && npm run engine:sync:check && npm run workflow:check && npm run appstore:check && npm run typecheck && npm run script:check && npm run ui-localization:check && npm run i18n:strict-check && npm run i18n:visible-check && cargo check --locked --manifest-path src-tauri/Cargo.toml && npm run security:check && npm run security:deep-check && npm run qa:governance-fixtures && npm audit --omit=dev --audit-level=high && npm run test:i18n && npm run test:network-doctor && npm test && cargo test --locked --manifest-path src-tauri/Cargo.toml && cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
     "check": "node scripts/run-check.mjs",
     "public:check": "node scripts/check-public-readiness.mjs",
     "docs:screenshots": "node scripts/capture-demo-screenshots.mjs",
