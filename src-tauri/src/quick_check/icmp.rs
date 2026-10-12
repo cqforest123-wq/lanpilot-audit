@@ -220,12 +220,13 @@ fn is_timeout(error: &io::Error) -> bool {
 /// Standard internet checksum (RFC 1071).
 fn checksum(data: &[u8]) -> u16 {
     let mut sum: u32 = 0;
-    let mut chunks = data.chunks_exact(2);
-    for chunk in chunks.by_ref() {
-        sum += u32::from(u16::from_be_bytes([chunk[0], chunk[1]]));
-    }
-    if let Some(&last) = chunks.remainder().first() {
-        sum += u32::from(u16::from_be_bytes([last, 0]));
+    for chunk in data.chunks(2) {
+        let word = if chunk.len() == 2 {
+            u16::from_be_bytes([chunk[0], chunk[1]])
+        } else {
+            u16::from_be_bytes([chunk[0], 0])
+        };
+        sum += u32::from(word);
     }
     while sum >> 16 != 0 {
         sum = (sum & 0xffff) + (sum >> 16);

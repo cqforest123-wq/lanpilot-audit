@@ -22,6 +22,8 @@
     "script:check": "for script in scripts/*.mjs; do node --check \"$script\" || exit 1; done",
     "workflow:check": "node scripts/check-workflow-security.mjs",
     "appstore:check": "node scripts/check-appstore-readiness.mjs",
+    "appstore:bundle:verify": "node scripts/verify-appstore-bundle.mjs",
+    "appstore:verify": "npm run appstore:check && npm run sandbox:verify && npm run app:build:appstore && npm run appstore:bundle:verify",
     "version:check": "node scripts/check-version-consistency.mjs",
     "engine:sync": "node scripts/sync-engine.mjs",
     "engine:sync:check": "node scripts/sync-engine.mjs --check",
