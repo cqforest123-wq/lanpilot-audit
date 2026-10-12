@@ -102,9 +102,8 @@ pub fn classify(reached: bool, ttl: u8, consecutive_silent: u8) -> TraceOutcome 
 pub fn reverse_lookup(address: IpAddr) -> Option<String> {
     let socket_address = SocketAddr::new(address, 0);
     let mut storage: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
-    let length: libc::socklen_t;
 
-    match socket_address {
+    let length: libc::socklen_t = match socket_address {
         SocketAddr::V4(v4) => {
             let target = &mut storage as *mut _ as *mut libc::sockaddr_in;
             // SAFETY: storage is large enough for sockaddr_in and is zeroed.
@@ -112,7 +111,7 @@ pub fn reverse_lookup(address: IpAddr) -> Option<String> {
                 (*target).sin_family = libc::AF_INET as libc::sa_family_t;
                 (*target).sin_addr.s_addr = u32::from_ne_bytes(v4.ip().octets());
             }
-            length = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t
         }
         SocketAddr::V6(v6) => {
             let target = &mut storage as *mut _ as *mut libc::sockaddr_in6;
@@ -121,9 +120,9 @@ pub fn reverse_lookup(address: IpAddr) -> Option<String> {
                 (*target).sin6_family = libc::AF_INET6 as libc::sa_family_t;
                 (*target).sin6_addr.s6_addr = v6.ip().octets();
             }
-            length = std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t;
+            std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t
         }
-    }
+    };
 
     let mut host = [0 as libc::c_char; 256];
     // SAFETY: storage and host are valid for the lengths passed.
