@@ -8,6 +8,7 @@ Re-run the verification at any time:
 
 ```sh
 npm run sandbox:verify
+npm run appstore:verify
 ```
 
 It builds a probe, wraps it in a bundle, signs it with
