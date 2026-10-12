@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { I18nProvider, resolveLocale } from "./i18n";
+import { I18nProvider, resolveLocale, supportedLocales } from "./i18n";
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -312,6 +312,19 @@ describe("audit authorization and failure flow", () => {
 describe("localization", () => {
   it("falls back to English for an unsupported locale", () => {
     expect(resolveLocale("xx-YY")).toBe("en");
+  });
+
+  it("matches supported system languages and keeps unsupported languages in English", () => {
+    expect(resolveLocale("de-DE")).toBe("de");
+    expect(resolveLocale("fr-CA")).toBe("fr");
+    expect(resolveLocale("pt-BR")).toBe("pt-BR");
+    expect(resolveLocale("pt-PT")).toBe("en");
+  });
+
+  it("offers every supported language in the selector", () => {
+    render(<I18nProvider><App /></I18nProvider>);
+    const options = within(screen.getByRole("combobox", { name: "Language" })).getAllByRole("option");
+    expect(options.map((option) => option.getAttribute("value"))).toEqual([...supportedLocales]);
   });
 
   it.each([

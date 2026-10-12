@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useI18n } from "./i18n";
 import { QuickCheckPanel } from "./QuickCheckPanel";
-import type { Locale } from "./i18n/types";
+import { supportedLocales, type Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkReliabilityEvidence, type ReliabilityStatus } from "./network-reliability";
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
@@ -1996,7 +1996,7 @@ function SettingsPage() {
         <div><span>{t("settings.dataStorageLocation")}</span><strong>~/lanpilot-audit-latest</strong></div>
         <div><span>{t("settings.exportFolder")}</span><strong>~/Desktop/LANPilot-Audit-Exports</strong></div>
         <div><span>{t("settings.privacyLocalFirst")}</span><strong>{t("settings.noCloudUpload")}</strong></div>
-        <div><span>{t("settings.supportedLanguages")}</span><strong>11</strong></div>
+        <div><span>{t("settings.supportedLanguages")}</span><strong>{supportedLocales.length}</strong></div>
       </div>
       <Guardrail />
       <div className="card compact"><h2>{t("language")}</h2><LanguageSelector /></div>
@@ -2010,24 +2010,29 @@ function SettingsPage() {
 
 function LanguageSelector() {
   const { locale, setLocale, t } = useI18n();
-  const visibleLocales = ["en", "zh-CN"] as const;
-  const names: Record<(typeof visibleLocales)[number], string> = {
+  const names: Record<Locale, string> = {
     en: "English",
     "zh-CN": "简体中文",
+    "zh-TW": "繁體中文",
+    ja: "日本語",
+    ko: "한국어",
+    de: "Deutsch",
+    fr: "Français",
+    es: "Español",
+    "pt-BR": "Português do Brasil",
+    it: "Italiano",
+    nl: "Nederlands",
   };
-  const selectedLocale = visibleLocales.includes(locale as (typeof visibleLocales)[number])
-    ? locale
-    : "en";
 
   return (
     <label className="language-selector">
       <span>{t("language")}</span>
       <select
         aria-label={t("language")}
-        value={selectedLocale}
+        value={locale}
         onChange={(event) => setLocale(event.target.value as Locale)}
       >
-        {visibleLocales.map((item) => (
+        {supportedLocales.map((item) => (
           <option value={item} key={item}>{names[item]}</option>
         ))}
       </select>
