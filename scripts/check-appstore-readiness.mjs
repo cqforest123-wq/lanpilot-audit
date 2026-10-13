@@ -69,6 +69,14 @@ if (!infoPlist.includes("NSLocalNetworkUsageDescription")) {
   fail("Info.plist is missing NSLocalNetworkUsageDescription.");
 }
 
+if (!infoPlist.includes("LSApplicationCategoryType") || !infoPlist.includes("public.app-category.utilities")) {
+  fail("Info.plist must set LSApplicationCategoryType to public.app-category.utilities for Mac App Store submission.");
+}
+
+if (!infoPlist.includes("LSMinimumSystemVersion") || !infoPlist.includes("<string>12.0</string>")) {
+  fail("Info.plist must set LSMinimumSystemVersion to 12.0 or higher for the arm64-only Mac App Store build.");
+}
+
 if (/bundled-engine|nmap|shell|script/i.test(JSON.stringify({ resources, macFiles }))) {
   fail("App Store bundle inputs must not include the bundled audit engine, nmap, shell, or script resources.");
 }

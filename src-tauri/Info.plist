@@ -4,6 +4,10 @@
 <dict>
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>LANPilot Audit uses local network access to check reachable devices, gateway, DNS, and connection health on networks you own or are authorized to review.</string>
 </dict>
