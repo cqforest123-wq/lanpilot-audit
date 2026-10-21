@@ -3191,6 +3191,23 @@ async fn list_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbo
         .map_err(|error| format!("Neighbour worker failed: {error}"))
 }
 
+#[tauri::command]
+async fn list_wifi_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbours::Neighbour>, String> {
+    let wifi = quick_check::wifi::status().ok_or_else(|| "wifi:notConnected".to_string())?;
+    let name = wifi.interface.ok_or_else(|| "wifi:notConnected".to_string())?;
+    if wifi.rssi_dbm.is_none() && wifi.transmit_rate_mbps.is_none() {
+        return Err("wifi:notConnected".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(quick_check::neighbours::list(resolve_names)
+            .into_iter()
+            .filter(|entry| entry.interface.as_deref() == Some(name.as_str()))
+            .collect())
+    })
+    .await
+    .map_err(|error| format!("Neighbour worker failed: {error}"))?
+}
+
 /// The subnet this Mac is attached to, as canonical CIDR.
 fn current_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
     let interfaces = quick_check::netinfo::interfaces();
@@ -3202,6 +3219,27 @@ fn current_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
         active.ipv4.parse().map_err(|_| "sweep:noLocalSubnet".to_string())?;
     let subnet = quick_check::scope::canonical_subnet(address, active.prefix)
         .ok_or_else(|| "sweep:noLocalSubnet".to_string())?;
+    Ok((address, active.prefix, subnet))
+}
+
+/// The Wi-Fi workspace must never fall back to Ethernet or a tunnel.
+fn current_wifi_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
+    let wifi = quick_check::wifi::status().ok_or_else(|| "wifi:notConnected".to_string())?;
+    let name = wifi.interface.ok_or_else(|| "wifi:notConnected".to_string())?;
+    // CoreWLAN returns an interface even when the radio is not associated.
+    if wifi.rssi_dbm.is_none() && wifi.transmit_rate_mbps.is_none() {
+        return Err("wifi:notConnected".to_string());
+    }
+    let interfaces = quick_check::netinfo::interfaces();
+    let active = interfaces.iter().find(|entry| {
+        entry.name == name
+            && entry.kind == quick_check::netinfo::InterfaceKind::Physical
+            && entry.is_up
+    }).ok_or_else(|| "wifi:notConnected".to_string())?;
+    let address: std::net::Ipv4Addr =
+        active.ipv4.parse().map_err(|_| "wifi:notConnected".to_string())?;
+    let subnet = quick_check::scope::canonical_subnet(address, active.prefix)
+        .ok_or_else(|| "wifi:notConnected".to_string())?;
     Ok((address, active.prefix, subnet))
 }
 
@@ -3244,6 +3282,24 @@ fn describe_sweep_scope(app: tauri::AppHandle) -> Result<serde_json::Value, Stri
     Ok(serde_json::json!({ "subnet": subnet, "authorized": authorized }))
 }
 
+#[tauri::command]
+fn describe_wifi_sweep_scope(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let (_, _, subnet) = current_wifi_subnet()?;
+    let authorized =
+        quick_check::scope::is_authorized(&quick_check::scope::read(&scope_dir(&app)?), &subnet);
+    Ok(serde_json::json!({ "subnet": subnet, "authorized": authorized }))
+}
+
+#[tauri::command]
+fn authorize_current_wifi_subnet(
+    app: tauri::AppHandle,
+    note: Option<String>,
+) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
+    let (_, _, subnet) = current_wifi_subnet()?;
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    quick_check::scope::authorize(&scope_dir(&app)?, &subnet, note, now)
+}
+
 /// Sweeps only the subnet this Mac is attached to, and only once the operator
 /// has said they may assess it. Every other tool acts on an address the user
 /// typed; this one reaches addresses they did not name, on a segment that is
@@ -3262,6 +3318,30 @@ async fn sweep_local_subnet(
 
     let _guard = execution_state.try_start()?;
 
+    tauri::async_runtime::spawn_blocking(move || {
+        quick_check::sweep::run(address, prefix, |done, total| {
+            let _ = app.emit("quick-check-sweep", (done, total));
+        })
+    })
+    .await
+    .map_err(|error| format!("Sweep worker failed: {error}"))?
+    .map_err(|refusal| format!("sweep:{}", match refusal {
+        quick_check::sweep::SweepRefusal::NoLocalSubnet => "noLocalSubnet",
+        quick_check::sweep::SweepRefusal::SubnetTooLarge => "subnetTooLarge",
+    }))
+}
+
+#[tauri::command]
+async fn sweep_wifi_subnet(
+    app: tauri::AppHandle,
+    execution_state: tauri::State<'_, AuditExecutionState>,
+) -> Result<quick_check::sweep::SweepResult, String> {
+    let (address, prefix, subnet) = current_wifi_subnet()?;
+    let records = quick_check::scope::read(&scope_dir(&app)?);
+    if !quick_check::scope::is_authorized(&records, &subnet) {
+        return Err(format!("scope:notAuthorized:{subnet}"));
+    }
+    let _guard = execution_state.try_start()?;
     tauri::async_runtime::spawn_blocking(move || {
         quick_check::sweep::run(address, prefix, |done, total| {
             let _ = app.emit("quick-check-sweep", (done, total));
@@ -3539,11 +3619,15 @@ pub fn run() {
             run_traceroute,
             inspect_device,
             list_neighbours,
+            list_wifi_neighbours,
             sweep_local_subnet,
+            sweep_wifi_subnet,
             read_scope,
             authorize_current_subnet,
+            authorize_current_wifi_subnet,
             revoke_subnet,
             describe_sweep_scope,
+            describe_wifi_sweep_scope,
             check_segment_size,
             open_device_page,
             diagnose_dns,

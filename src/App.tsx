@@ -2,17 +2,17 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useI18n } from "./i18n";
-import { QuickCheckPanel } from "./QuickCheckPanel";
+import { QuickCheckPanel, WifiDevicesPage } from "./QuickCheckPanel";
 import { supportedLocales, type Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkReliabilityEvidence, type ReliabilityStatus } from "./network-reliability";
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
 import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
 import packageJson from "../package.json";
-import { LayoutDashboard, Radar, ShieldCheck, FileText, Wrench, FileDown, Settings as SettingsIcon, Satellite, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Cable, Globe, Waypoints, Mail, Scale, Code2, Bug, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Radar, ShieldCheck, FileText, Wrench, FileDown, Settings as SettingsIcon, Satellite, Wifi, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Cable, Globe, Waypoints, Mail, Scale, Code2, Bug, type LucideIcon } from "lucide-react";
 import "./App.css";
 
-type Page = "overview" | "quickCheck" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
+type Page = "overview" | "quickCheck" | "wifi" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
 type StepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 type AuditStepId =
   | "init_lab"
@@ -210,6 +210,7 @@ function App() {
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
           <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
           <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
+          <NavButton icon={Wifi} active={page === "wifi"} disabled={auditRunning} onClick={() => navigate("wifi")} label={t("navWifi")} />
           {sandboxed ? null : (
             <>
               <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
@@ -271,6 +272,7 @@ function App() {
           />
         )}
         {page === "report" && <ReportPage initialReport={latestReport} />}
+        {page === "wifi" && <WifiDevicesPage />}
         {page === "assets" && <GovernanceDataPage titleKey="toolbox.assets" descriptionKey="toolbox.assetsDescription" fields={["assetInventorySummary", "assetInventory", "localNetworkConfig"]} />}
         {page === "exposure" && <GovernanceDataPage titleKey="toolbox.exposure" descriptionKey="toolbox.exposureDescription" fields={["serviceExposureSummary", "serviceExposureMatrix", "mdnsServices", "webBaseline", "tlsCertificates"]} />}
         {page === "quickCheck" && (

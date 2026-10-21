@@ -176,6 +176,9 @@ function describeScopeError(raw: unknown, t: (key: string, params?: Record<strin
   if (kind === "scope" && code === "notAuthorized") {
     return t("quickCheck.error.notAuthorized", { subnet: extra ?? "" });
   }
+  if (kind === "wifi" && code) {
+    return t(`wifi.error.${code}`);
+  }
   if ((kind === "scope" || kind === "sweep") && code) {
     return t(`quickCheck.error.${code}`);
   }
@@ -557,7 +560,7 @@ const PROFILES: DeviceProfile[] = ["camera", "switch", "generic"];
 const WEB_PORTS = [443, 8443, 80, 8080, 8000];
 
 /** What this Mac has already talked to. Passive, and explicitly partial. */
-function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
+function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => void; wifiOnly?: boolean }) {
   const { t } = useI18n();
   const [items, setItems] = useState<Neighbour[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -571,14 +574,16 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      setItems(await invoke<Neighbour[]>("list_neighbours", { resolveNames: true }));
-    } catch {
+      setItems(await invoke<Neighbour[]>(wifiOnly ? "list_wifi_neighbours" : "list_neighbours", { resolveNames: !wifiOnly }));
+    } catch (failure) {
       setItems([]);
+      setError(describeScopeError(failure, t));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t, wifiOnly]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -612,7 +617,7 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
   const runSweep = async () => {
     setSweeping(true); setProgress(null); setSwept(null); setError(null);
     try {
-      setSwept(await invoke<SweepResult>("sweep_local_subnet"));
+      setSwept(await invoke<SweepResult>(wifiOnly ? "sweep_wifi_subnet" : "sweep_local_subnet"));
       await load();
     } catch (failure) {
       setError(describeScopeError(failure, t));
@@ -624,7 +629,7 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
   const startSweep = async () => {
     setError(null);
     try {
-      const current = await invoke<SweepScope>("describe_sweep_scope");
+      const current = await invoke<SweepScope>(wifiOnly ? "describe_wifi_sweep_scope" : "describe_sweep_scope");
       if (current.authorized) {
         await runSweep();
       } else {
@@ -637,7 +642,7 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
 
   const confirmScope = async () => {
     try {
-      setScope(await invoke<ScopeRecord[]>("authorize_current_subnet", { note: note.trim() || null }));
+      setScope(await invoke<ScopeRecord[]>(wifiOnly ? "authorize_current_wifi_subnet" : "authorize_current_subnet", { note: note.trim() || null }));
       setPending(null);
       setNote("");
       await runSweep();
@@ -660,11 +665,11 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
   return (
     <details className="qc-details qc-neighbours" open>
       <summary>
-        {t("quickCheck.neighboursHeading")}
-        {items ? <span className="qc-count">{items.length}</span> : null}
+        {wifiOnly ? t("wifi.devicesHeading") : t("quickCheck.neighboursHeading")}
+        {shown ? <span className="qc-count">{shown.length}</span> : null}
       </summary>
       <p className="qc-note">
-        {swept ? t("quickCheck.sweptSummary", { subnet: swept.subnet, probed: String(swept.probed) }) : t("quickCheck.neighboursLimit")}
+        {swept ? t("quickCheck.sweptSummary", { subnet: swept.subnet, probed: String(swept.probed) }) : wifiOnly ? t("wifi.passiveNote") : t("quickCheck.neighboursLimit")}
       </p>
       {shown && shown.length > 0 ? (
         <table className="qc-table">
@@ -672,9 +677,11 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
             {shown.map((entry) => (
               <tr key={`${entry.ip}-${entry.mac ?? "none"}`}>
                 <td>
-                  <button type="button" className="qc-link" onClick={() => onPick(entry.ip)}>
-                    <span className="qc-mono">{entry.ip}</span>
-                  </button>
+                  {onPick ? (
+                    <button type="button" className="qc-link" onClick={() => onPick(entry.ip)}>
+                      <span className="qc-mono">{entry.ip}</span>
+                    </button>
+                  ) : <span className="qc-mono">{entry.ip}</span>}
                 </td>
                 <td>
                   {entry.vendor ? (
@@ -689,7 +696,7 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
           </tbody>
         </table>
       ) : (
-        <p className="qc-note">{loading || sweeping ? t("quickCheck.loadingOverview") : t("quickCheck.neighboursEmpty")}</p>
+        error ? null : <p className="qc-note">{loading || sweeping ? t("quickCheck.loadingOverview") : wifiOnly ? t("wifi.empty") : t("quickCheck.neighboursEmpty")}</p>
       )}
       {pending ? (
         <div className="qc-consent" role="alertdialog" aria-label={t("quickCheck.scopeTitle")}>
@@ -730,16 +737,63 @@ function Neighbours({ onPick }: { onPick: (ip: string) => void }) {
 
       <div className="qc-presets">
         <button type="button" disabled={loading || sweeping} onClick={() => void load()}>
-          {t("quickCheck.neighboursRefresh")}
+          {wifiOnly ? t("wifi.refresh") : t("quickCheck.neighboursRefresh")}
         </button>
         <button type="button" className="primary" disabled={sweeping || pending !== null} onClick={() => void startSweep()}>
-          {sweeping ? t("quickCheck.sweepRunning") : t("quickCheck.sweepStart")}
+          {sweeping ? (wifiOnly ? t("wifi.scanning") : t("quickCheck.sweepRunning")) : wifiOnly ? t("wifi.scan") : t("quickCheck.sweepStart")}
         </button>
         {sweeping && progress ? (
           <span className="qc-live-count">{progress[0]} / {progress[1]}</span>
         ) : null}
       </div>
+      {sweeping && progress ? (
+        <progress className="wifi-scan-progress" value={progress[0]} max={Math.max(progress[1], 1)} aria-label={t("quickCheck.sweepRunning")} />
+      ) : null}
     </details>
+  );
+}
+
+export function WifiDevicesPage() {
+  const { t } = useI18n();
+  const [network, setNetwork] = useState<LocalNetwork | null>(null);
+  const [networkLoading, setNetworkLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void invoke<LocalNetwork>("read_local_network")
+      .then((snapshot) => { if (active) setNetwork(snapshot); })
+      .catch(() => { if (active) setNetwork(null); })
+      .finally(() => { if (active) setNetworkLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const wifi = network?.wifi;
+  return (
+    <section className="content-stack wifi-workspace">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">{t("navWifi")}</span>
+          <h2>{t("wifi.title")}</h2>
+          <p>{t("wifi.description")}</p>
+        </div>
+        <span className="wifi-free-badge">{t("wifi.freeLabel")}</span>
+      </header>
+      <section className="wifi-signal-summary" aria-label={t("wifi.connection")}>
+        <div className="wifi-signal-heading">
+          <h3>{t("wifi.connection")}</h3>
+          {networkLoading ? <span className="muted">{t("wifi.loading")}</span> : null}
+        </div>
+        <div className="wifi-signal-metrics">
+          <div><span>{t("wifi.signal")}</span><strong>{wifi?.quality ? t(`quickCheck.signal.${wifi.quality}`) : t("wifi.unavailable")}</strong></div>
+          <div><span>{t("wifi.rssi")}</span><strong>{wifi?.rssiDbm != null ? `${wifi.rssiDbm} dBm` : "—"}</strong></div>
+          <div><span>{t("wifi.snr")}</span><strong>{wifi?.snrDb != null ? `${wifi.snrDb} dB` : "—"}</strong></div>
+          <div><span>{t("wifi.linkRate")}</span><strong>{wifi?.transmitRateMbps != null ? `${Math.round(wifi.transmitRateMbps)} Mbps` : "—"}</strong></div>
+        </div>
+      </section>
+      <div className="card wifi-devices-panel">
+        <Neighbours wifiOnly />
+      </div>
+    </section>
   );
 }
 
@@ -1151,11 +1205,11 @@ function WatchTool() {
 const SANDBOX_SAFE_TOOLS: Tool[] = ["ping", "port", "device", "route", "dns", "watch"];
 
 /**
- * The single destination for network diagnostics.
+ * The destination for general network diagnostics.
  *
  * `deepReport` is the authorization-gated whole-path analysis. It lives here as
- * a tab rather than as its own sidebar entry, because two top-level entries both
- * meaning "check my network" only made users guess which one to open.
+ * a tab rather than as another general-purpose network-check entry. Wi-Fi device
+ * discovery has a separate workspace.
  */
 export function QuickCheckPanel({
   onRunningChange,
