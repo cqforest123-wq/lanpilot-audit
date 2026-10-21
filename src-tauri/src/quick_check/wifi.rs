@@ -37,6 +37,13 @@ pub struct WifiStatus {
     pub quality: Option<SignalQuality>,
 }
 
+impl WifiStatus {
+    /// The radio is associated only when CoreWLAN has a usable link reading.
+    pub fn is_associated(&self) -> bool {
+        self.interface.is_some() && (self.rssi_dbm.is_some() || self.transmit_rate_mbps.is_some())
+    }
+}
+
 /// Grade a link from signal and noise.
 ///
 /// SNR is preferred when both are known: -60 dBm in a quiet room is a good
@@ -159,6 +166,23 @@ mod tests {
         assert_eq!(snr(Some(-55), None), None);
         assert_eq!(snr(Some(0), Some(-92)), None);
         assert_eq!(snr(Some(-55), Some(0)), None);
+    }
+
+    #[test]
+    fn association_requires_an_interface_and_a_link_reading() {
+        let mut status = WifiStatus {
+            interface: Some("en0".to_string()),
+            rssi_dbm: None,
+            noise_dbm: None,
+            snr_db: None,
+            transmit_rate_mbps: None,
+            quality: None,
+        };
+        assert!(!status.is_associated());
+        status.transmit_rate_mbps = Some(300.0);
+        assert!(status.is_associated());
+        status.interface = None;
+        assert!(!status.is_associated());
     }
 
     #[test]

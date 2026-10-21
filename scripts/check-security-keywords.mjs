@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 
 const root = new URL("../", import.meta.url).pathname;
-const excludedDirectories = new Set([".git", "node_modules", "target", "dist", "gen", "release"]);
+const excludedDirectories = new Set([".git", "node_modules", "target", "dist", "gen", "release", "release-assets"]);
 const excludedExtensions = new Set([".md", ".lock", ".png", ".ico", ".icns"]);
 const prohibited = [
   ["ex", "ploit"],

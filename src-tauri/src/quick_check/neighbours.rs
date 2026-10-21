@@ -57,6 +57,14 @@ pub struct Neighbour {
     pub hostname: Option<String>,
 }
 
+/// Keep a workspace's cache view scoped to the interface it represents.
+pub fn on_interface(entries: Vec<Neighbour>, interface: &str) -> Vec<Neighbour> {
+    entries
+        .into_iter()
+        .filter(|entry| entry.interface.as_deref() == Some(interface))
+        .collect()
+}
+
 /// Classify an address before trying to name its manufacturer.
 ///
 /// Order matters: multicast is checked first because the multicast bit and the
@@ -246,6 +254,29 @@ mod tests {
     #[test]
     fn formats_addresses_the_way_they_are_written() {
         assert_eq!(format_mac(&[0x0e, 0xb2, 0x4e, 0x92, 0x57, 0xd5]), "0e:b2:4e:92:57:d5");
+    }
+
+    #[test]
+    fn interface_scoped_view_excludes_other_adapters_and_unknown_routes() {
+        let entry = |ip: &str, interface: Option<&str>| Neighbour {
+            ip: ip.to_string(),
+            mac: None,
+            kind: NeighbourKind::Unresolved,
+            vendor: None,
+            likely: None,
+            interface: interface.map(str::to_string),
+            hostname: None,
+        };
+        let filtered = on_interface(
+            vec![
+                entry("192.0.2.2", Some("en0")),
+                entry("192.0.2.3", Some("en1")),
+                entry("192.0.2.4", None),
+            ],
+            "en0",
+        );
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].ip, "192.0.2.2");
     }
 
     /// One rt_msghdr followed by a sockaddr_in and a sockaddr_dl.

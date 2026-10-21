@@ -2,17 +2,17 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useI18n } from "./i18n";
-import { QuickCheckPanel } from "./QuickCheckPanel";
+import { QuickCheckPanel, WifiDevicesPage } from "./QuickCheckPanel";
 import { supportedLocales, type Locale } from "./i18n/types";
 import { deduplicateFindings, localizeAssetLabel, localizeFinding, localizeGatewayStatus, reportCopy, type LocalizedFinding } from "./report-localization";
 import { reliabilityThresholds, type NetworkReliabilityDiagnosis, type NetworkReliabilityEvidence, type ReliabilityStatus } from "./network-reliability";
 import { demoNetworkReliabilityRun } from "./demo-network-reliability";
 import { diagnoseNetworkDoctor, type DiagnosticDomain, type DoctorMode, type DoctorScoreState, type DoctorScorecard, type RootCauseCandidate } from "./network-doctor";
 import packageJson from "../package.json";
-import { LayoutDashboard, Radar, ShieldCheck, FileText, Wrench, FileDown, Settings as SettingsIcon, Satellite, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Cable, Globe, Waypoints, Mail, Scale, Code2, Bug, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Radar, ShieldCheck, FileText, Wrench, FileDown, Settings as SettingsIcon, Satellite, Wifi, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Cable, Globe, Waypoints, Mail, Scale, Code2, Bug, type LucideIcon } from "lucide-react";
 import "./App.css";
 
-type Page = "overview" | "quickCheck" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
+type Page = "overview" | "quickCheck" | "wifi" | "authorization" | "engine" | "interface" | "run" | "assets" | "exposure" | "report" | "compare" | "remediation" | "export" | "settings";
 type StepStatus = "pending" | "running" | "success" | "failed" | "skipped";
 type AuditStepId =
   | "init_lab"
@@ -203,25 +203,36 @@ function App() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
-          <span className="brand-mark"><Satellite size={18} strokeWidth={2.25} /></span>
-          <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
-        </button>
+        <div className="sidebar-top">
+          <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
+            <span className="brand-mark"><Satellite size={18} strokeWidth={2.25} /></span>
+            <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
+          </button>
+          <LanguageSelector />
+        </div>
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
-          <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
-          <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
+          <div className="sidebar-group">
+            <span className="sidebar-group-label">{t("nav.group.workspace")}</span>
+            <div className="sidebar-group-items">
+              <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
+              <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
+              <NavButton icon={Wifi} active={page === "wifi"} disabled={auditRunning} onClick={() => navigate("wifi")} label={t("navWifi")} />
+            </div>
+          </div>
           {sandboxed ? null : (
-            <>
-              <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
-              <NavButton icon={FileText} active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
-              <NavButton icon={Wrench} active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
-              <NavButton icon={FileDown} active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
-            </>
+            <div className="sidebar-group">
+              <span className="sidebar-group-label">{t("nav.group.governance")}</span>
+              <div className="sidebar-group-items">
+                <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
+                <NavButton icon={FileText} active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
+                <NavButton icon={Wrench} active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
+                <NavButton icon={FileDown} active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+              </div>
+            </div>
           )}
-          <NavButton icon={SettingsIcon} active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
         </nav>
         <div className="sidebar-footer">
-          <LanguageSelector />
+          <NavButton icon={SettingsIcon} active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
           <span className="local-first-chip">{t("settings.noCloudUpload")}</span>
         </div>
       </aside>
@@ -271,6 +282,7 @@ function App() {
           />
         )}
         {page === "report" && <ReportPage initialReport={latestReport} />}
+        {page === "wifi" && <WifiDevicesPage />}
         {page === "assets" && <GovernanceDataPage titleKey="toolbox.assets" descriptionKey="toolbox.assetsDescription" fields={["assetInventorySummary", "assetInventory", "localNetworkConfig"]} />}
         {page === "exposure" && <GovernanceDataPage titleKey="toolbox.exposure" descriptionKey="toolbox.exposureDescription" fields={["serviceExposureSummary", "serviceExposureMatrix", "mdnsServices", "webBaseline", "tlsCertificates"]} />}
         {page === "quickCheck" && (
@@ -2026,7 +2038,8 @@ function LanguageSelector() {
 
   return (
     <label className="language-selector">
-      <span>{t("language")}</span>
+      <Globe size={16} aria-hidden="true" />
+      <span className="language-selector-label">{t("language")}</span>
       <select
         aria-label={t("language")}
         value={locale}
