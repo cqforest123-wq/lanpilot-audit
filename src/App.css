@@ -65,16 +65,51 @@ a { color: inherit; }
 .wifi-signal-summary { padding: 14px 0 18px; border-top: 1px solid #dbe3ea; border-bottom: 1px solid #dbe3ea; }
 .wifi-signal-heading { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .wifi-signal-heading h3 { margin: 0; font-size: 15px; }
+.wifi-link-context { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -3px 0 14px; color: #64748b; font-size: 12px; font-variant-numeric: tabular-nums; }
 .wifi-signal-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .wifi-signal-metrics > div { min-width: 0; display: grid; gap: 5px; }
 .wifi-signal-metrics span { color: #64748b; font-size: 12px; }
 .wifi-signal-metrics strong { overflow-wrap: anywhere; font-size: 15px; font-variant-numeric: tabular-nums; }
-.wifi-devices-panel { padding: 20px; }
-.wifi-devices-panel .qc-neighbours { border-top: 0; padding-top: 0; }
+.wifi-devices-panel { padding: 0; }
+.wifi-devices-panel .qc-neighbours { margin-top: 0; padding: 18px; border-color: #dfe5f0; border-radius: 10px; background: #fff; }
+.wifi-devices-panel .qc-neighbours summary { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 750; color: #152238; }
+.wifi-scan-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.wifi-scan-actions .qc-presets { margin: 0; }
+.wifi-scan-actions .qc-presets button { border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 650; }
+.wifi-scan-actions .qc-presets button.primary { border-color: #0e7490; background: #0e7490; color: white; }
+.wifi-source-label { color: #475569; font-size: 12px; font-weight: 650; }
+.wifi-inventory-tools { display: grid; gap: 12px; margin: 16px 0 12px; }
+.wifi-device-search { min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #d7e0e9; border-radius: 7px; color: #718096; background: #fff; }
+.wifi-device-search:focus-within { border-color: #0891b2; box-shadow: 0 0 0 3px rgba(8, 145, 178, .12); }
+.wifi-device-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: #172338; background: transparent; font-size: 13px; }
+.wifi-device-search input::placeholder { color: #8a96a8; }
+.wifi-device-filters { display: flex; gap: 4px; padding: 3px; overflow-x: auto; border-radius: 8px; background: #eef2f6; }
+.wifi-device-filters button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 9px; border: 1px solid transparent; border-radius: 6px; color: #586579; background: transparent; font-size: 12px; font-weight: 650; }
+.wifi-device-filters button span { color: #7d899a; font-size: 11px; font-variant-numeric: tabular-nums; }
+.wifi-device-filters button.selected { border-color: #d5e2e8; color: #0f3f4d; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .06); }
+.wifi-device-filters button.selected span { color: #0e7490; }
+.wifi-device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; margin-top: 12px; }
+.wifi-device-card { min-width: 0; padding: 13px; border: 1px solid #dfe5ed; border-radius: 8px; background: #fff; }
+.wifi-device-card-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wifi-device-icon { flex: 0 0 auto; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; color: #087e8b; background: #e8f5f5; }
+.wifi-device-title { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.wifi-device-title strong { overflow: hidden; color: #172338; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.wifi-device-title span { color: #536277; font-size: 12px; font-variant-numeric: tabular-nums; }
+.wifi-device-kind { flex: 0 0 auto; padding: 3px 6px; border-radius: 5px; color: #425466; background: #edf2f7; font-size: 10px; font-weight: 700; }
+.wifi-device-kind.network { color: #075985; background: #e0f2fe; }
+.wifi-device-kind.camera { color: #6d28d9; background: #ede9fe; }
+.wifi-device-kind.endpoint { color: #047857; background: #d1fae5; }
+.wifi-device-details { display: grid; gap: 7px; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid #edf1f5; }
+.wifi-device-details > div { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.wifi-device-details dt { flex: 0 0 auto; color: #7b8797; font-size: 11px; }
+.wifi-device-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #344256; font-size: 11px; text-align: right; }
+.wifi-no-matches { margin: 18px 0; color: #64748b; font-size: 13px; text-align: center; }
+.wifi-coverage-note { margin: 14px 0 0; color: #8490a0; font-size: 11px; line-height: 1.5; }
 .wifi-scan-progress { display: block; width: 100%; height: 4px; margin-top: 12px; accent-color: #0891b2; }
 
 @media (max-width: 900px) {
   .wifi-signal-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wifi-device-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); }
 }
 
 .product-header {
