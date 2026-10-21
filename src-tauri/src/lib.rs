@@ -3194,15 +3194,13 @@ async fn list_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbo
 #[tauri::command]
 async fn list_wifi_neighbours(resolve_names: bool) -> Result<Vec<quick_check::neighbours::Neighbour>, String> {
     let wifi = quick_check::wifi::status().ok_or_else(|| "wifi:notConnected".to_string())?;
+    let associated = wifi.is_associated();
     let name = wifi.interface.ok_or_else(|| "wifi:notConnected".to_string())?;
-    if wifi.rssi_dbm.is_none() && wifi.transmit_rate_mbps.is_none() {
+    if !associated {
         return Err("wifi:notConnected".to_string());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(quick_check::neighbours::list(resolve_names)
-            .into_iter()
-            .filter(|entry| entry.interface.as_deref() == Some(name.as_str()))
-            .collect())
+        Ok(quick_check::neighbours::on_interface(quick_check::neighbours::list(resolve_names), &name))
     })
     .await
     .map_err(|error| format!("Neighbour worker failed: {error}"))?
@@ -3225,9 +3223,10 @@ fn current_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
 /// The Wi-Fi workspace must never fall back to Ethernet or a tunnel.
 fn current_wifi_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
     let wifi = quick_check::wifi::status().ok_or_else(|| "wifi:notConnected".to_string())?;
+    let associated = wifi.is_associated();
     let name = wifi.interface.ok_or_else(|| "wifi:notConnected".to_string())?;
     // CoreWLAN returns an interface even when the radio is not associated.
-    if wifi.rssi_dbm.is_none() && wifi.transmit_rate_mbps.is_none() {
+    if !associated {
         return Err("wifi:notConnected".to_string());
     }
     let interfaces = quick_check::netinfo::interfaces();
