@@ -203,26 +203,36 @@ function App() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
-          <span className="brand-mark"><Satellite size={18} strokeWidth={2.25} /></span>
-          <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
-        </button>
+        <div className="sidebar-top">
+          <button className="brand" type="button" disabled={auditRunning} onClick={() => navigate("overview")}>
+            <span className="brand-mark"><Satellite size={18} strokeWidth={2.25} /></span>
+            <span><strong>LANPilot Audit</strong><small>v{packageJson.version}</small></span>
+          </button>
+          <LanguageSelector />
+        </div>
         <nav className="sidebar-nav" aria-label={t("navigation.primary")}>
-          <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
-          <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
-          <NavButton icon={Wifi} active={page === "wifi"} disabled={auditRunning} onClick={() => navigate("wifi")} label={t("navWifi")} />
+          <div className="sidebar-group">
+            <span className="sidebar-group-label">{t("nav.group.workspace")}</span>
+            <div className="sidebar-group-items">
+              <NavButton icon={LayoutDashboard} active={page === "overview"} disabled={auditRunning} onClick={() => navigate("overview")} label={t("navOverview")} />
+              <NavButton icon={Radar} active={page === "quickCheck"} disabled={auditRunning} onClick={() => navigate("quickCheck")} label={t("navQuickCheck")} />
+              <NavButton icon={Wifi} active={page === "wifi"} disabled={auditRunning} onClick={() => navigate("wifi")} label={t("navWifi")} />
+            </div>
+          </div>
           {sandboxed ? null : (
-            <>
-              <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
-              <NavButton icon={FileText} active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
-              <NavButton icon={Wrench} active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
-              <NavButton icon={FileDown} active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
-            </>
+            <div className="sidebar-group">
+              <span className="sidebar-group-label">{t("nav.group.governance")}</span>
+              <div className="sidebar-group-items">
+                <NavButton icon={ShieldCheck} active={["authorization", "engine", "interface", "run"].includes(page)} disabled={auditRunning} onClick={startAuthorization} label={t("navGovernanceAudit")} />
+                <NavButton icon={FileText} active={page === "report"} disabled={auditRunning} onClick={() => navigate("report")} label={t("navReport")} />
+                <NavButton icon={Wrench} active={page === "remediation"} disabled={auditRunning} onClick={() => navigate("remediation")} label={t("navRemediation")} />
+                <NavButton icon={FileDown} active={page === "export"} disabled={auditRunning} onClick={() => navigate("export")} label={t("navExport")} />
+              </div>
+            </div>
           )}
-          <NavButton icon={SettingsIcon} active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
         </nav>
         <div className="sidebar-footer">
-          <LanguageSelector />
+          <NavButton icon={SettingsIcon} active={page === "settings"} disabled={auditRunning} onClick={() => navigate("settings")} label={t("navSettings")} />
           <span className="local-first-chip">{t("settings.noCloudUpload")}</span>
         </div>
       </aside>
@@ -2028,7 +2038,8 @@ function LanguageSelector() {
 
   return (
     <label className="language-selector">
-      <span>{t("language")}</span>
+      <Globe size={16} aria-hidden="true" />
+      <span className="language-selector-label">{t("language")}</span>
       <select
         aria-label={t("language")}
         value={locale}
