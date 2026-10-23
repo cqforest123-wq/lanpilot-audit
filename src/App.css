@@ -995,6 +995,14 @@ th { color: #526172; background: #f6f8fa; }
 .qc-consent strong { display: block; font-size: 1rem; margin-bottom: 0.35rem; }
 .qc-consent p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.6; max-width: 62ch; }
 .qc-consent .qc-field { flex: 1 1 auto; max-width: 22rem; }
+.wifi-scope-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.55rem;
+  margin: 0 0 0.8rem; padding: 0.7rem 0.8rem; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.wifi-scope-facts div { min-width: 0; }
+.wifi-scope-facts dt { font-size: 0.75rem; opacity: 0.68; }
+.wifi-scope-facts dd { margin: 0.15rem 0 0; font-size: 0.88rem; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 .qc-scope-list {
   display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;

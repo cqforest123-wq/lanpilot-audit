@@ -61,7 +61,14 @@ interface Neighbour {
   interface: string | null; hostname: string | null;
 }
 interface ScopeRecord { subnet: string; authorizedAt: string; note: string | null }
-interface SweepScope { subnet: string; authorized: boolean }
+interface SweepScope {
+  subnet: string;
+  authorized: boolean;
+  interface?: string;
+  localAddress?: string;
+  prefix?: number;
+  targetCount?: number;
+}
 interface SweepResult {
   subnet: string; probed: number; responded: number; hosts: Neighbour[];
 }
@@ -634,7 +641,7 @@ function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => voi
     setError(null);
     try {
       const current = await invoke<SweepScope>(wifiOnly ? "describe_wifi_sweep_scope" : "describe_sweep_scope");
-      if (current.authorized) {
+      if (current.authorized && !wifiOnly) {
         await runSweep();
       } else {
         setPending(current);
@@ -773,7 +780,16 @@ function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => voi
       {pending ? (
         <div className="qc-consent" role="alertdialog" aria-label={t("quickCheck.scopeTitle")}>
           <strong>{t("quickCheck.scopeTitle")}</strong>
-          <p>{t("quickCheck.scopeBody", { subnet: pending.subnet })}</p>
+          {wifiOnly ? (
+            <>
+              <p>{pending.targetCount ? t("wifi.scopeOwnershipWarning", { subnet: pending.subnet, count: String(pending.targetCount) }) : t("wifi.scopeTooLarge", { subnet: pending.subnet })}</p>
+              <dl className="wifi-scope-facts">
+                <div><dt>{t("wifi.scopeInterface")}</dt><dd>{pending.interface ?? "—"}</dd></div>
+                <div><dt>{t("wifi.scopeLocalAddress")}</dt><dd>{pending.localAddress ?? "—"}/{pending.prefix ?? "—"}</dd></div>
+                <div><dt>{t("wifi.scopeTargetCount")}</dt><dd>{pending.targetCount ?? "—"}</dd></div>
+              </dl>
+            </>
+          ) : <p>{t("quickCheck.scopeBody", { subnet: pending.subnet })}</p>}
           <label className="qc-field">
             <span>{t("quickCheck.scopeNoteLabel")}</span>
             <input
@@ -782,8 +798,8 @@ function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => voi
             />
           </label>
           <div className="qc-presets">
-            <button type="button" className="primary" onClick={() => void confirmScope()}>
-              {t("quickCheck.scopeConfirm")}
+            <button type="button" className="primary" disabled={wifiOnly && (pending.targetCount ?? 0) === 0} onClick={() => void confirmScope()}>
+              {t(wifiOnly ? "wifi.scopeConfirm" : "quickCheck.scopeConfirm", wifiOnly ? { count: String(pending.targetCount ?? 0) } : undefined)}
             </button>
             <button type="button" onClick={() => { setPending(null); setNote(""); }}>
               {t("quickCheck.scopeCancel")}
@@ -796,7 +812,7 @@ function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => voi
 
       {scope.length > 0 ? (
         <div className="qc-scope-list">
-          <span>{t("quickCheck.scopeAuthorized")}</span>
+          <span>{t(wifiOnly ? "wifi.scopeStoredAuthorizations" : "quickCheck.scopeAuthorized")}</span>
           {scope.map((record) => (
             <span key={record.subnet} className="qc-scope-item">
               <span className="qc-mono">{record.subnet}</span>

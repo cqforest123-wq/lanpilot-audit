@@ -3221,7 +3221,7 @@ fn current_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
 }
 
 /// The Wi-Fi workspace must never fall back to Ethernet or a tunnel.
-fn current_wifi_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
+fn current_wifi_subnet() -> Result<(String, std::net::Ipv4Addr, u8, String), String> {
     let wifi = quick_check::wifi::status().ok_or_else(|| "wifi:notConnected".to_string())?;
     let associated = wifi.is_associated();
     let name = wifi.interface.ok_or_else(|| "wifi:notConnected".to_string())?;
@@ -3239,7 +3239,7 @@ fn current_wifi_subnet() -> Result<(std::net::Ipv4Addr, u8, String), String> {
         active.ipv4.parse().map_err(|_| "wifi:notConnected".to_string())?;
     let subnet = quick_check::scope::canonical_subnet(address, active.prefix)
         .ok_or_else(|| "wifi:notConnected".to_string())?;
-    Ok((address, active.prefix, subnet))
+    Ok((name, address, active.prefix, subnet))
 }
 
 fn scope_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -3283,10 +3283,20 @@ fn describe_sweep_scope(app: tauri::AppHandle) -> Result<serde_json::Value, Stri
 
 #[tauri::command]
 fn describe_wifi_sweep_scope(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let (_, _, subnet) = current_wifi_subnet()?;
+    let (interface, address, prefix, subnet) = current_wifi_subnet()?;
     let authorized =
         quick_check::scope::is_authorized(&quick_check::scope::read(&scope_dir(&app)?), &subnet);
-    Ok(serde_json::json!({ "subnet": subnet, "authorized": authorized }))
+    let target_count = quick_check::sweep::hosts_in(address, prefix)
+        .map(|hosts| hosts.len())
+        .unwrap_or(0);
+    Ok(serde_json::json!({
+        "subnet": subnet,
+        "authorized": authorized,
+        "interface": interface,
+        "localAddress": address.to_string(),
+        "prefix": prefix,
+        "targetCount": target_count,
+    }))
 }
 
 #[tauri::command]
@@ -3294,7 +3304,7 @@ fn authorize_current_wifi_subnet(
     app: tauri::AppHandle,
     note: Option<String>,
 ) -> Result<Vec<quick_check::scope::ScopeRecord>, String> {
-    let (_, _, subnet) = current_wifi_subnet()?;
+    let (_, _, _, subnet) = current_wifi_subnet()?;
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     quick_check::scope::authorize(&scope_dir(&app)?, &subnet, note, now)
 }
@@ -3335,7 +3345,7 @@ async fn sweep_wifi_subnet(
     app: tauri::AppHandle,
     execution_state: tauri::State<'_, AuditExecutionState>,
 ) -> Result<quick_check::sweep::SweepResult, String> {
-    let (address, prefix, subnet) = current_wifi_subnet()?;
+    let (_, address, prefix, subnet) = current_wifi_subnet()?;
     let records = quick_check::scope::read(&scope_dir(&app)?);
     if !quick_check::scope::is_authorized(&records, &subnet) {
         return Err(format!("scope:notAuthorized:{subnet}"));
