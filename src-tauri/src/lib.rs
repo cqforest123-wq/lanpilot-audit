@@ -1,6 +1,5 @@
 pub mod quick_check;
 
-use quick_check::device_profile::{self, NetworkDevice};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -217,7 +216,6 @@ struct LatestReport {
     remediation_roadmap: Option<String>,
     evidence_index: Option<String>,
     asset_inventory: Option<String>,
-    network_devices: Vec<NetworkDevice>,
     asset_inventory_summary: Option<String>,
     service_exposure_matrix: Option<String>,
     service_exposure_summary: Option<String>,
@@ -1048,21 +1046,6 @@ fn read_latest_report() -> Result<LatestReport, String> {
         "02-assets/asset-inventory.csv",
         &mut Vec::new(),
     )?;
-    let passive_assets = read_optional_report_file(
-        &latest_lab,
-        "02-assets/passive-arp-assets.csv",
-        &mut Vec::new(),
-    )?;
-    let reachable_ips = read_optional_report_file(
-        &latest_lab,
-        "02-assets/reachable-client-ips.txt",
-        &mut Vec::new(),
-    )?;
-    let open_ports = read_optional_report_file(
-        &latest_lab,
-        "03-services/reachable-open-ports.csv",
-        &mut Vec::new(),
-    )?;
     let asset_inventory_summary = read_optional_report_file(
         &latest_lab,
         "06-report/asset-inventory-summary.md",
@@ -1087,13 +1070,6 @@ fn read_latest_report() -> Result<LatestReport, String> {
         &latest_lab,
         "03-services/mdns-services.csv",
         &mut Vec::new(),
-    )?;
-    let network_devices = device_profile::build_network_devices(
-        asset_inventory.as_deref(),
-        passive_assets.as_deref(),
-        reachable_ips.as_deref(),
-        open_ports.as_deref(),
-        mdns_services.as_deref(),
     )?;
     let web_baseline =
         read_optional_report_file(&latest_lab, "03-services/web-baseline.csv", &mut Vec::new())?;
@@ -1170,7 +1146,6 @@ fn read_latest_report() -> Result<LatestReport, String> {
         remediation_roadmap,
         evidence_index,
         asset_inventory,
-        network_devices,
         asset_inventory_summary,
         service_exposure_matrix,
         service_exposure_summary,
@@ -3224,8 +3199,19 @@ async fn list_wifi_neighbours(resolve_names: bool) -> Result<Vec<quick_check::ne
     if !associated {
         return Err("wifi:notConnected".to_string());
     }
+    let local_interface = quick_check::netinfo::interfaces()
+        .into_iter()
+        .find(|entry| entry.name == name && entry.is_up)
+        .ok_or_else(|| "wifi:notConnected".to_string())?;
+    let address = local_interface.ipv4.parse().map_err(|_| "wifi:notConnected".to_string())?;
+    let prefix = local_interface.prefix;
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(quick_check::neighbours::on_interface(quick_check::neighbours::list(resolve_names), &name))
+        Ok(quick_check::neighbours::on_interface_subnet(
+            quick_check::neighbours::list(resolve_names),
+            &name,
+            address,
+            prefix,
+        ))
     })
     .await
     .map_err(|error| format!("Neighbour worker failed: {error}"))?

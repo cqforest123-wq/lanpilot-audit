@@ -578,14 +578,17 @@ function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => voi
   const [error, setError] = useState<string | null>(null);
   const [wifiQuery, setWifiQuery] = useState("");
   const [wifiFilter, setWifiFilter] = useState<WifiDeviceFilter>("all");
+  const [cacheReadAt, setCacheReadAt] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       setItems(await invoke<Neighbour[]>(wifiOnly ? "list_wifi_neighbours" : "list_neighbours", { resolveNames: !wifiOnly }));
+      if (wifiOnly) setCacheReadAt(new Date());
     } catch (failure) {
       setItems([]);
+      if (wifiOnly) setCacheReadAt(null);
       setError(describeScopeError(failure, t));
     } finally {
       setLoading(false);
@@ -695,6 +698,7 @@ function Neighbours({ onPick, wifiOnly = false }: { onPick?: (ip: string) => voi
       <p className="qc-note">
         {swept ? t("quickCheck.sweptSummary", { subnet: swept.subnet, probed: String(swept.probed) }) : wifiOnly ? t("wifi.passiveNote") : t("quickCheck.neighboursLimit")}
       </p>
+      {wifiOnly && cacheReadAt ? <p className="qc-note">{t("wifi.cacheReadAt", { time: cacheReadAt.toLocaleTimeString() })}</p> : null}
       {wifiOnly && shown && shown.length > 0 ? (
         <div className="wifi-inventory-tools">
           <label className="wifi-device-search">
@@ -836,6 +840,7 @@ export function WifiDevicesPage() {
   }, []);
 
   const wifi = network?.wifi;
+  const wifiInterface = network?.interfaces.find((entry) => entry.name === wifi?.interface && entry.isUp);
   return (
     <section className="content-stack wifi-workspace">
       <header className="page-heading">
@@ -852,6 +857,8 @@ export function WifiDevicesPage() {
           {networkLoading ? <span className="muted">{t("wifi.loading")}</span> : null}
         </div>
         <div className="wifi-signal-metrics">
+          <div><span>{t("wifi.interface")}</span><strong>{wifi?.interface ?? "—"}</strong></div>
+          <div><span>{t("wifi.localAddress")}</span><strong>{wifiInterface ? `${wifiInterface.ipv4}/${wifiInterface.prefix}` : "—"}</strong></div>
           <div><span>{t("wifi.signal")}</span><strong>{wifi?.quality ? t(`quickCheck.signal.${wifi.quality}`) : t("wifi.unavailable")}</strong></div>
           <div><span>{t("wifi.rssi")}</span><strong>{wifi?.rssiDbm != null ? `${wifi.rssiDbm} dBm` : "—"}</strong></div>
           <div><span>{t("wifi.snr")}</span><strong>{wifi?.snrDb != null ? `${wifi.snrDb} dB` : "—"}</strong></div>

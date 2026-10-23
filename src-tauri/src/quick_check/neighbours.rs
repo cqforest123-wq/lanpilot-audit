@@ -65,6 +65,30 @@ pub fn on_interface(entries: Vec<Neighbour>, interface: &str) -> Vec<Neighbour> 
         .collect()
 }
 
+/// Keep only cache entries inside the subnet currently assigned to an interface.
+/// Interface indexes can be reused after roaming or DHCP changes, so interface
+/// matching alone can leave addresses from the previous network in the cache.
+pub fn on_interface_subnet(
+    entries: Vec<Neighbour>,
+    interface: &str,
+    address: Ipv4Addr,
+    prefix: u8,
+) -> Vec<Neighbour> {
+    if prefix > 32 {
+        return Vec::new();
+    }
+    let mask = u32::MAX.checked_shl(u32::from(32 - prefix)).unwrap_or(0);
+    let network = u32::from(address) & mask;
+    on_interface(entries, interface)
+        .into_iter()
+        .filter(|entry| {
+            entry.ip.parse::<Ipv4Addr>()
+                .map(|ip| u32::from(ip) & mask == network)
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
 /// Classify an address before trying to name its manufacturer.
 ///
 /// Order matters: multicast is checked first because the multicast bit and the
@@ -277,6 +301,18 @@ mod tests {
         );
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].ip, "192.0.2.2");
+    }
+
+    #[test]
+    fn current_subnet_filter_excludes_cached_addresses_from_previous_networks() {
+        let entries = vec![
+            Neighbour { ip: "192.168.64.20".into(), mac: None, kind: NeighbourKind::Unresolved, vendor: None, likely: None, interface: Some("en0".into()), hostname: None },
+            Neighbour { ip: "192.168.50.20".into(), mac: None, kind: NeighbourKind::Unresolved, vendor: None, likely: None, interface: Some("en0".into()), hostname: None },
+            Neighbour { ip: "192.168.64.21".into(), mac: None, kind: NeighbourKind::Unresolved, vendor: None, likely: None, interface: Some("en1".into()), hostname: None },
+        ];
+        let filtered = on_interface_subnet(entries, "en0", Ipv4Addr::new(192, 168, 64, 5), 24);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].ip, "192.168.64.20");
     }
 
     /// One rt_msghdr followed by a sockaddr_in and a sockaddr_dl.

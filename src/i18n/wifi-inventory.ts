@@ -8,6 +8,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} visible", "wifi.deviceType": "Likely type", "wifi.manufacturer": "Manufacturer",
     "wifi.hostname": "Name", "wifi.mac": "MAC address", "wifi.interface": "Interface",
     "wifi.noMatches": "No devices match this filter.",
+    "wifi.localAddress": "Local address / prefix", "wifi.cacheReadAt": "System neighbor cache read at {time}",
     "wifi.cacheSource": "Neighbor cache",     "wifi.coverage": "Best-effort results: sleeping, isolated or non-responsive devices may not appear.",
   },
   "zh-CN": {
@@ -17,6 +18,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "当前可见 {count} 台", "wifi.deviceType": "可能类型", "wifi.manufacturer": "厂商",
     "wifi.hostname": "名称", "wifi.mac": "MAC 地址", "wifi.interface": "接口",
     "wifi.noMatches": "没有符合当前筛选条件的设备。",
+    "wifi.localAddress": "本机地址 / 前缀", "wifi.cacheReadAt": "系统邻居缓存读取时间：{time}",
     "wifi.cacheSource": "本机邻居缓存",     "wifi.coverage": "结果仅供参考：休眠、网络隔离或未响应的设备可能不会显示。",
   },
   "zh-TW": {
@@ -26,6 +28,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "目前可見 {count} 台", "wifi.deviceType": "可能類型", "wifi.manufacturer": "廠商",
     "wifi.hostname": "名稱", "wifi.mac": "MAC 位址", "wifi.interface": "介面",
     "wifi.noMatches": "沒有符合目前篩選條件的裝置。",
+    "wifi.localAddress": "本機位址 / 前綴", "wifi.cacheReadAt": "系統鄰居快取讀取時間：{time}",
     "wifi.cacheSource": "本機鄰居快取",     "wifi.coverage": "結果僅供參考：休眠、網路隔離或未回應的裝置可能不會顯示。",
   },
   ja: {
@@ -35,6 +38,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "表示中 {count} 台", "wifi.deviceType": "推定タイプ", "wifi.manufacturer": "メーカー",
     "wifi.hostname": "名前", "wifi.mac": "MAC アドレス", "wifi.interface": "インターフェース",
     "wifi.noMatches": "条件に一致するデバイスはありません。",
+    "wifi.localAddress": "ローカルアドレス / プレフィックス", "wifi.cacheReadAt": "システム近隣キャッシュの読み取り時刻: {time}",
     "wifi.cacheSource": "近隣キャッシュ",     "wifi.coverage": "結果は参考情報です。スリープ中、隔離中、または応答しないデバイスは表示されない場合があります。",
   },
   ko: {
@@ -44,6 +48,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "현재 {count}대 표시", "wifi.deviceType": "추정 유형", "wifi.manufacturer": "제조업체",
     "wifi.hostname": "이름", "wifi.mac": "MAC 주소", "wifi.interface": "인터페이스",
     "wifi.noMatches": "필터와 일치하는 기기가 없습니다.",
+    "wifi.localAddress": "로컬 주소 / 프리픽스", "wifi.cacheReadAt": "시스템 이웃 캐시 읽은 시각: {time}",
     "wifi.cacheSource": "이웃 캐시",     "wifi.coverage": "결과는 참고용입니다. 절전, 격리 또는 무응답 기기는 표시되지 않을 수 있습니다.",
   },
   de: {
@@ -53,6 +58,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} sichtbar", "wifi.deviceType": "Vermuteter Typ", "wifi.manufacturer": "Hersteller",
     "wifi.hostname": "Name", "wifi.mac": "MAC-Adresse", "wifi.interface": "Schnittstelle",
     "wifi.noMatches": "Keine Geräte entsprechen diesem Filter.",
+    "wifi.localAddress": "Lokale Adresse / Präfix", "wifi.cacheReadAt": "System-Nachbar-Cache gelesen um {time}",
     "wifi.cacheSource": "Nachbar-Cache",     "wifi.coverage": "Ergebnisse sind unverbindlich: Schlafende, isolierte oder nicht antwortende Geräte werden möglicherweise nicht angezeigt.",
   },
   fr: {
@@ -62,6 +68,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} visibles", "wifi.deviceType": "Type probable", "wifi.manufacturer": "Fabricant",
     "wifi.hostname": "Nom", "wifi.mac": "Adresse MAC", "wifi.interface": "Interface",
     "wifi.noMatches": "Aucun appareil ne correspond à ce filtre.",
+    "wifi.localAddress": "Adresse locale / préfixe", "wifi.cacheReadAt": "Cache système des voisins lu à {time}",
     "wifi.cacheSource": "Cache des voisins",     "wifi.coverage": "Résultats indicatifs : les appareils en veille, isolés ou sans réponse peuvent ne pas apparaître.",
   },
   es: {
@@ -71,6 +78,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} visibles", "wifi.deviceType": "Tipo probable", "wifi.manufacturer": "Fabricante",
     "wifi.hostname": "Nombre", "wifi.mac": "Dirección MAC", "wifi.interface": "Interfaz",
     "wifi.noMatches": "Ningún dispositivo coincide con este filtro.",
+    "wifi.localAddress": "Dirección local / prefijo", "wifi.cacheReadAt": "Caché del sistema consultada a las {time}",
     "wifi.cacheSource": "Caché de vecinos",     "wifi.coverage": "Resultados orientativos: los dispositivos en reposo, aislados o sin respuesta pueden no aparecer.",
   },
   "pt-BR": {
@@ -80,6 +88,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} visíveis", "wifi.deviceType": "Tipo provável", "wifi.manufacturer": "Fabricante",
     "wifi.hostname": "Nome", "wifi.mac": "Endereço MAC", "wifi.interface": "Interface",
     "wifi.noMatches": "Nenhum dispositivo corresponde a este filtro.",
+    "wifi.localAddress": "Endereço local / prefixo", "wifi.cacheReadAt": "Cache de vizinhos do sistema lido às {time}",
     "wifi.cacheSource": "Cache de vizinhos",     "wifi.coverage": "Resultados aproximados: dispositivos em repouso, isolados ou sem resposta podem não aparecer.",
   },
   it: {
@@ -89,6 +98,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} visibili", "wifi.deviceType": "Tipo probabile", "wifi.manufacturer": "Produttore",
     "wifi.hostname": "Nome", "wifi.mac": "Indirizzo MAC", "wifi.interface": "Interfaccia",
     "wifi.noMatches": "Nessun dispositivo corrisponde a questo filtro.",
+    "wifi.localAddress": "Indirizzo locale / prefisso", "wifi.cacheReadAt": "Cache di sistema dei vicini letta alle {time}",
     "wifi.cacheSource": "Cache dei vicini",     "wifi.coverage": "Risultati indicativi: i dispositivi in sospensione, isolati o senza risposta potrebbero non apparire.",
   },
   nl: {
@@ -98,6 +108,7 @@ export const wifiInventoryMessages: Record<Locale, Messages> = {
     "wifi.resultCount": "{count} zichtbaar", "wifi.deviceType": "Waarschijnlijk type", "wifi.manufacturer": "Fabrikant",
     "wifi.hostname": "Naam", "wifi.mac": "MAC-adres", "wifi.interface": "Interface",
     "wifi.noMatches": "Geen apparaten voldoen aan dit filter.",
+    "wifi.localAddress": "Lokaal adres / prefix", "wifi.cacheReadAt": "Systeem-buurcache gelezen om {time}",
     "wifi.cacheSource": "Neighborcache",     "wifi.coverage": "Resultaten zijn indicatief: slapende, geïsoleerde of niet-reagerende apparaten verschijnen mogelijk niet.",
   },
 };

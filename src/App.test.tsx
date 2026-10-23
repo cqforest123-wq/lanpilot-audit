@@ -309,34 +309,6 @@ describe("audit authorization and failure flow", () => {
   });
 });
 
-describe("evidence-linked asset profiles", () => {
-  it("renders correlated device evidence in the localized report", async () => {
-    invokeMock.mockImplementation((command: string) => {
-      if (command === "read_latest_report") return Promise.resolve({
-        ...localizedReportFixture,
-        assetInventory: "ip,mac,vendor\n192.0.2.40,,Realtek\n",
-        networkDevices: [{
-          ip: "192.0.2.40", mac: null, oui: null, vendor: "Realtek",
-          locallyAdministeredMac: false, ttl: null, inferredOs: null,
-          openPorts: [{ port: "443", protocol: "tcp", service: "https", version: null }],
-          mdnsServices: [], netbiosName: null, tailscaleNode: null, confidenceScore: 75,
-          evidenceSources: ["audit-asset-inventory", "arp-neighbor-cache", "low-intensity-service-check"],
-          categoryGuess: "Web service host", riskLevel: "Low",
-        }],
-      });
-      return Promise.resolve();
-    });
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(screen.getByRole("button", { name: "Reports" }));
-
-    expect(await screen.findByText("Evidence-linked device profiles")).toBeVisible();
-    expect(screen.getByText("192.0.2.40")).toBeVisible();
-    expect(screen.getByText("tcp/443 https")).toBeVisible();
-    expect(screen.getByText("75%")).toBeVisible();
-  });
-});
-
 describe("localization", () => {
   it("falls back to English for an unsupported locale", () => {
     expect(resolveLocale("xx-YY")).toBe("en");

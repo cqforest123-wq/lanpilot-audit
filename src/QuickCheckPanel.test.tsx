@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { QuickCheckPanel } from "./QuickCheckPanel";
+import { QuickCheckPanel, WifiDevicesPage } from "./QuickCheckPanel";
 import { I18nProvider } from "./i18n";
 
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
@@ -83,5 +83,27 @@ describe("Quick Check panel", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("utun4 (198.18.0.1)"),
     );
+  });
+});
+
+describe("live Wi-Fi inventory", () => {
+  it("shows the current interface and reads devices from its live neighbor cache", async () => {
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "read_local_network") return Promise.resolve(network({
+        wifi: { interface: "en0", rssiDbm: -48, noiseDbm: -90, snrDb: 42, transmitRateMbps: 866, quality: "good" },
+        interfaces: [{ name: "en0", kind: "physical", ipv4: "192.168.50.214", netmask: "255.255.255.0", prefix: 24, isUp: true, carriesFakeIp: false }],
+      }));
+      if (command === "list_wifi_neighbours") return Promise.resolve([{
+        ip: "192.168.50.88", mac: "1c:f6:4c:57:02:b3", kind: "device", vendor: null,
+        likely: null, interface: "en0", hostname: null,
+      }]);
+      return Promise.resolve([]);
+    });
+    render(<I18nProvider><WifiDevicesPage /></I18nProvider>);
+
+    expect(await screen.findByText("192.168.50.214/24")).toBeVisible();
+    expect(await screen.findByText("192.168.50.88")).toBeVisible();
+    expect(invokeMock).toHaveBeenCalledWith("list_wifi_neighbours", { resolveNames: false });
+    expect(invokeMock).not.toHaveBeenCalledWith("read_latest_report");
   });
 });
