@@ -1,6 +1,7 @@
 //! Quick Check: a sandbox-safe, in-process reachability probe.
 
 pub mod devices;
+pub mod device_profile;
 pub mod dns;
 pub mod egress;
 pub mod icmp;

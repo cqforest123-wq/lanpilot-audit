@@ -91,6 +91,24 @@ interface ReportSummary {
   gatewayPostureStatus: string | null;
 }
 
+interface NetworkDevice {
+  ip: string;
+  mac: string | null;
+  oui: string | null;
+  vendor: string | null;
+  locallyAdministeredMac: boolean | null;
+  ttl: number | null;
+  inferredOs: string | null;
+  openPorts: { port: string; protocol: string | null; service: string | null; version: string | null }[];
+  mdnsServices: { serviceType: string; instanceName: string; hostname: string | null }[];
+  netbiosName: string | null;
+  tailscaleNode: { hostname: string; operatingSystem: string | null; addresses: string[]; online: boolean | null } | null;
+  confidenceScore: number;
+  evidenceSources: string[];
+  categoryGuess: string | null;
+  riskLevel: string | null;
+}
+
 interface LatestReport {
   generatedAt: number | null;
   labDirectory: string;
@@ -100,6 +118,7 @@ interface LatestReport {
   remediationRoadmap: string | null;
   evidenceIndex: string | null;
   assetInventory: string | null;
+  networkDevices?: NetworkDevice[];
   assetInventorySummary: string | null;
   serviceExposureMatrix: string | null;
   serviceExposureSummary: string | null;
@@ -936,6 +955,7 @@ function ReportPage({ initialReport }: { initialReport: LatestReport | null }) {
           {report.missingFiles.length > 0 && <p className="message error">{t("missingFiles")}: {report.missingFiles.join(", ")}</p>}
           <SummaryCards summary={normalizedSummary(report)} />
           <SeverityChart summary={normalizedSummary(report)} />
+          {view === "localized" && <DeviceProfileTable devices={report.networkDevices ?? []} />}
           <div className="report-tabs" role="tablist">
             <button className={view === "localized" ? "active" : ""} type="button" role="tab" aria-selected={view === "localized"} onClick={() => setView("localized")}>{copy.localizedView}</button>
             <button className={view === "raw" ? "active" : ""} type="button" role="tab" aria-selected={view === "raw"} onClick={() => setView("raw")}>{copy.rawView}</button>
@@ -1077,7 +1097,32 @@ function GovernanceDataPage({ titleKey, descriptionKey, fields }: { titleKey: st
     <p className="limitation">{t("toolbox.observationLimit")}</p>
     {error && <RawDetail detail={error} />}
     {!report && !error && <p className="message">{t("common.loading")}</p>}
+    {report && fields.includes("assetInventory") && <DeviceProfileTable devices={report.networkDevices ?? []} />}
     {report && fields.map((field) => <ReportSection key={field} title={t(`toolbox.file.${field}`)} content={(report[field] as string | null) ?? null} collapsible />)}
+  </section>;
+}
+
+function DeviceProfileTable({ devices }: { devices: NetworkDevice[] }) {
+  const { t } = useI18n();
+  if (devices.length === 0) return null;
+  return <section className="card report-section device-profile-section">
+      <h2>{t("deviceProfile.title")}</h2>
+      <p>{t("deviceProfile.description")}</p>
+      <div className="table-wrap"><table>
+        <thead><tr>
+          <th>{t("deviceProfile.ip")}</th><th>{t("deviceProfile.mac")}</th><th>{t("deviceProfile.vendor")}</th>
+          <th>{t("deviceProfile.ports")}</th><th>{t("deviceProfile.mdns")}</th><th>{t("deviceProfile.coverage")}</th><th>{t("deviceProfile.sources")}</th>
+        </tr></thead>
+        <tbody>{devices.map((device) => <tr key={device.ip}>
+          <td><code>{device.ip}</code></td>
+          <td><code>{device.mac ?? t("deviceProfile.notCollected")}</code>{device.oui && <small className="device-profile-subline">{device.oui}</small>}{device.locallyAdministeredMac && <small className="device-profile-warning">{t("deviceProfile.localMac")}</small>}</td>
+          <td>{device.vendor ?? device.categoryGuess ?? t("deviceProfile.notCollected")}</td>
+          <td>{device.openPorts.length ? device.openPorts.map((port) => <span className="device-profile-port" key={`${port.protocol}-${port.port}`}>{port.protocol ?? "tcp"}/{port.port}{port.service ? ` ${port.service}` : ""}</span>) : t("deviceProfile.none")}</td>
+          <td>{device.mdnsServices.length ? device.mdnsServices.map((service) => <span className="device-profile-port" key={`${service.serviceType}-${service.instanceName}`}>{service.serviceType} · {service.instanceName}</span>) : t("deviceProfile.none")}</td>
+          <td>{device.confidenceScore}%</td>
+          <td>{device.evidenceSources.map((source) => t(`deviceProfile.source.${source}`)).join(" · ") || t("deviceProfile.none")}</td>
+        </tr>)}</tbody>
+      </table></div>
   </section>;
 }
 
